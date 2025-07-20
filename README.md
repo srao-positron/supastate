@@ -1,0 +1,2 @@
+# supastate
+Supastate for StatelyDB
