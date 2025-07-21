@@ -1,17 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { createHash } from 'crypto'
 
+// Enhanced schema with rich metadata support
 const MemorySyncSchema = z.object({
   teamId: z.string().uuid(),
   projectName: z.string(),
+  conversationId: z.string().uuid().optional(),
+  sessionId: z.string(),
+  userId: z.string().uuid().optional(),
+  branchName: z.string().optional(),
+  commitSha: z.string().optional(),
   chunks: z.array(z.object({
     chunkId: z.string(),
     content: z.string(),
     embedding: z.array(z.number()).length(1536),
-    metadata: z.any().optional(),
+    messageType: z.enum(['user', 'assistant', 'system', 'tool_use', 'tool_result']).optional(),
+    metadata: z.object({
+      filePaths: z.array(z.string()).optional(),
+      topics: z.array(z.string()).optional(),
+      entitiesMentioned: z.array(z.string()).optional(),
+      toolsUsed: z.array(z.string()).optional(),
+      hasCode: z.boolean().optional(),
+      summary: z.string().optional(),
+    }).optional(),
   })),
 })
+
+/**
+ * Syncs memory chunks from Camille to Supastate with enhanced metadata
+ * @param request - Contains team info, conversation context, and memory chunks
+ * @returns Success with sync statistics or error with details
+ */
 
 export async function POST(request: NextRequest) {
   try {

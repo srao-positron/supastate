@@ -18,10 +18,12 @@ const CreateReviewSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Auth check
+    // Auth check - support both API key and bearer token
     const apiKey = request.headers.get('x-api-key')
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Missing API key' }, { status: 401 })
+    const bearerToken = request.headers.get('authorization')?.replace('Bearer ', '')
+    
+    if (!apiKey && !bearerToken) {
+      return NextResponse.json({ error: 'Missing authentication' }, { status: 401 })
     }
 
     // Parse request
@@ -40,16 +42,41 @@ export async function POST(request: NextRequest) {
     // Initialize Supabase
     const supabase = await createServiceClient()
 
-    // Verify API key
-    const { data: apiKeyData, error: apiKeyError } = await supabase
-      .from('api_keys')
-      .select('team_id, user_id')
-      .eq('key_hash', apiKey)
-      .eq('is_active', true)
-      .single()
+    let userId: string | null = null
 
-    if (apiKeyError || apiKeyData?.team_id !== teamId) {
-      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+    // Verify authentication
+    if (apiKey) {
+      // API key authentication
+      const { data: apiKeyData, error: apiKeyError } = await supabase
+        .from('api_keys')
+        .select('team_id, user_id')
+        .eq('key_hash', apiKey)
+        .eq('is_active', true)
+        .single()
+
+      if (apiKeyError || apiKeyData?.team_id !== teamId) {
+        return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+      }
+      userId = apiKeyData.user_id
+    } else if (bearerToken) {
+      // Bearer token authentication
+      const { data: { user }, error } = await supabase.auth.getUser(bearerToken)
+      if (error || !user) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      }
+      
+      // Verify user belongs to the team
+      const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('user_id', user.id)
+        .eq('team_id', teamId)
+        .single()
+      
+      if (!teamMember) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      }
+      userId = user.id
     }
 
     // Create review session
@@ -66,7 +93,7 @@ export async function POST(request: NextRequest) {
           number: parseInt(prNumber),
         },
         status: 'pending',
-        created_by: apiKeyData.user_id,
+        created_by: userId,
       })
       .select()
       .single()
