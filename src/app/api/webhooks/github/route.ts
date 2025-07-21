@@ -111,10 +111,13 @@ async function handlePullRequest(payload: any) {
   // In production, this would queue a job or trigger a serverless function
   console.log('Created review session:', session.id)
   
-  // Post initial comment on PR
+  // Post initial comment on PR using GitHub App
+  const { postPRComment } = await import('@/lib/github/app')
+  const [owner, repo] = repository.full_name.split('/')
   await postPRComment(
     installation.id,
-    repository.full_name,
+    owner,
+    repo,
     pull_request.number,
     `🤖 Supastate multi-agent review initiated!\n\nI'll analyze this PR with specialized AI agents. You can track progress [here](${process.env.NEXT_PUBLIC_APP_URL}/reviews/${session.id}).`
   )
@@ -130,14 +133,3 @@ async function handlePullRequestReviewComment(payload: any) {
   console.log('Pull request review comment event:', payload.action)
 }
 
-// Helper function to post comments on PRs using GitHub App
-async function postPRComment(
-  installationId: number,
-  repo: string,
-  prNumber: number,
-  body: string
-) {
-  // This would use the GitHub App API to post comments
-  // Implementation depends on your GitHub API client setup
-  console.log('Would post comment:', { repo, prNumber, body })
-}

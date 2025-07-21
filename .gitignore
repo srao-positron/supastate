@@ -46,3 +46,6 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 supabase-config
+
+# Security - contains credentials
+docs/vercel-env-vars.txt
