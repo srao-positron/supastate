@@ -14,6 +14,10 @@ import {
   TimelineView, 
   MemoryInsights 
 } from '@/components/memories/memory-explorer-enhancements'
+import { MemoryActivityCharts } from '@/components/memories/memory-activity-charts'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export default function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[]>([])
@@ -22,7 +26,9 @@ export default function MemoriesPage() {
   const [searchResponse, setSearchResponse] = useState<MemorySearchResponse | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'timeline'>('list')
-  const [showInsights, setShowInsights] = useState(false)
+  const [showInsights, setShowInsights] = useState(true) // Show insights by default
+  const [projectSummaries, setProjectSummaries] = useState<any[]>([])
+  const [loadingSummaries, setLoadingSummaries] = useState(false)
   const [stats, setStats] = useState({
     totalMemories: 0,
     projectCounts: {} as Record<string, number>,
@@ -41,12 +47,31 @@ export default function MemoriesPage() {
         
         // Load initial memories
         await handleSearch('', undefined)
+        
+        // Load project summaries
+        await loadProjectSummaries()
       } catch (error) {
         console.error('Failed to load initial data:', error)
       }
     }
     loadInitialData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load project summaries
+  const loadProjectSummaries = async () => {
+    setLoadingSummaries(true)
+    try {
+      const response = await fetch('/api/memories/summaries')
+      if (response.ok) {
+        const data = await response.json()
+        setProjectSummaries(data.summaries || [])
+      }
+    } catch (error) {
+      console.error('Failed to load summaries:', error)
+    } finally {
+      setLoadingSummaries(false)
+    }
+  }
 
   // Search handler
   const handleSearch = useCallback(async (query: string, projectFilter?: string[]) => {
@@ -183,52 +208,93 @@ export default function MemoriesPage() {
 
       <Separator />
 
-      {/* Search and Results */}
-      <div className="space-y-6">
-        <MemorySearch
-          onSearch={handleSearch}
-          isSearching={isLoading}
-        />
-
-        {/* Quick Actions and View Toggle */}
-        <QuickActionsBar 
-          currentView={viewMode}
-          onViewChange={setViewMode}
-        />
-
-        {/* Memory Insights (toggleable) */}
-        {memories.length > 0 && (
-          <div className="space-y-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowInsights(!showInsights)}
-            >
-              {showInsights ? 'Hide' : 'Show'} Insights
-            </Button>
-            
-            {showInsights && <MemoryInsights memories={memories} />}
-          </div>
-        )}
-
-        {/* Memory Display based on view mode */}
-        {viewMode === 'timeline' ? (
-          <TimelineView memories={memories} />
-        ) : (
-          <MemoryList
-            memories={memories}
-            isLoading={isLoading}
-            error={error}
-            hasMore={searchResponse?.hasMore || false}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-            showSimilarity={true}
-            showRelated={true}
-            onRelatedMemoryClick={handleRelatedMemoryClick}
-          />
+      {/* Insights (shown by default) */}
+      <div className="space-y-4">
+        {showInsights && memories.length > 0 && (
+          <>
+            <MemoryInsights memories={memories} />
+            <MemoryActivityCharts memories={memories} />
+          </>
         )}
       </div>
+
+      {/* Tabbed Interface */}
+      <Tabs defaultValue="summaries" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="summaries">Project Summaries</TabsTrigger>
+          <TabsTrigger value="details">Detailed Memories</TabsTrigger>
+        </TabsList>
+
+        {/* Project Summaries Tab */}
+        <TabsContent value="summaries" className="space-y-4">
+          {loadingSummaries ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Loading project summaries...</p>
+            </div>
+          ) : projectSummaries.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">
+                  No project summaries available yet. Summaries are generated automatically every 5 minutes.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {projectSummaries.map((summary) => (
+                <Card key={summary.id} className="overflow-hidden">
+                  <CardHeader>
+                    <CardTitle className="text-lg">{summary.project_name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Updated {new Date(summary.updated_at).toLocaleString()} • 
+                      {summary.memories_included} memories analyzed
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {summary.summary_markdown}
+                      </ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Detailed Memories Tab */}
+        <TabsContent value="details" className="space-y-6">
+          <MemorySearch
+            onSearch={handleSearch}
+            isSearching={isLoading}
+          />
+
+          {/* Quick Actions and View Toggle */}
+          <QuickActionsBar 
+            currentView={viewMode}
+            onViewChange={setViewMode}
+          />
+
+          {/* Memory Display based on view mode */}
+          {viewMode === 'timeline' ? (
+            <TimelineView memories={memories} />
+          ) : (
+            <MemoryList
+              memories={memories}
+              isLoading={isLoading}
+              error={error}
+              hasMore={searchResponse?.hasMore || false}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              showSimilarity={true}
+              showRelated={true}
+              onRelatedMemoryClick={handleRelatedMemoryClick}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

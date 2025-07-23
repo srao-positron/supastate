@@ -228,7 +228,12 @@ export function MemoryInsights({ memories }: MemoryInsightsProps) {
   const avgWordsPerMemory = memories.length > 0 ? Math.round(totalWords / memories.length) : 0
   
   const messageTypes = memories.reduce((acc, m) => {
-    const type = m.metadata?.messageType || 'unknown'
+    // Check various possible locations for message type
+    const type = m.metadata?.messageType || 
+                 m.metadata?.type || 
+                 m.metadata?.role ||
+                 (m.content.toLowerCase().includes('user:') ? 'user' : 
+                  m.content.toLowerCase().includes('assistant:') ? 'assistant' : 'unknown')
     acc[type] = (acc[type] || 0) + 1
     return acc
   }, {} as Record<string, number>)
