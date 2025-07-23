@@ -11,25 +11,13 @@ CREATE TABLE IF NOT EXISTS code_graphs (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Table to store code relationships
-CREATE TABLE IF NOT EXISTS code_relationships (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  source TEXT NOT NULL,
-  target TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('calls', 'imports', 'extends', 'implements')),
-  count INTEGER DEFAULT 1,
-  metadata JSONB,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- Note: code_relationships table already exists from initial schema
+-- We'll just create the code_graphs table here
 
 -- Indexes for better performance
-CREATE INDEX idx_code_graphs_repository ON code_graphs(repository);
-CREATE INDEX idx_code_graphs_branch ON code_graphs(branch);
-CREATE INDEX idx_code_graphs_analyzed_at ON code_graphs(analyzed_at DESC);
-
-CREATE INDEX idx_code_relationships_source ON code_relationships(source);
-CREATE INDEX idx_code_relationships_target ON code_relationships(target);
-CREATE INDEX idx_code_relationships_type ON code_relationships(type);
+CREATE INDEX IF NOT EXISTS idx_code_graphs_repository ON code_graphs(repository);
+CREATE INDEX IF NOT EXISTS idx_code_graphs_branch ON code_graphs(branch);
+CREATE INDEX IF NOT EXISTS idx_code_graphs_analyzed_at ON code_graphs(analyzed_at DESC);
 
 -- Add code entity type to memories
 ALTER TABLE memories 
@@ -66,15 +54,4 @@ CREATE POLICY "Users can create code graphs" ON code_graphs
   FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
--- RLS policies for code_relationships
-ALTER TABLE code_relationships ENABLE ROW LEVEL SECURITY;
-
--- Allow authenticated users to read relationships
-CREATE POLICY "Users can view code relationships" ON code_relationships
-  FOR SELECT
-  USING (auth.role() = 'authenticated');
-
--- Allow authenticated users to create relationships
-CREATE POLICY "Users can create code relationships" ON code_relationships
-  FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
+-- Note: RLS policies for code_relationships already defined in initial schema

@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -17,10 +22,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
-          extensions?: Json
           operationName?: string
           query?: string
           variables?: Json
+          extensions?: Json
         }
         Returns: Json
       }
@@ -102,7 +107,6 @@ export type Database = {
           last_used_at: string | null
           name: string
           team_id: string | null
-          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -113,7 +117,6 @@ export type Database = {
           last_used_at?: string | null
           name: string
           team_id?: string | null
-          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -124,7 +127,6 @@ export type Database = {
           last_used_at?: string | null
           name?: string
           team_id?: string | null
-          user_id?: string | null
         }
         Relationships: [
           {
@@ -132,13 +134,6 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "api_keys_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -234,7 +229,6 @@ export type Database = {
           source_code: string | null
           team_id: string | null
           updated_at: string | null
-          user_id: string | null
         }
         Insert: {
           branch_state_id?: string | null
@@ -256,7 +250,6 @@ export type Database = {
           source_code?: string | null
           team_id?: string | null
           updated_at?: string | null
-          user_id?: string | null
         }
         Update: {
           branch_state_id?: string | null
@@ -278,7 +271,6 @@ export type Database = {
           source_code?: string | null
           team_id?: string | null
           updated_at?: string | null
-          user_id?: string | null
         }
         Relationships: [
           {
@@ -300,13 +292,6 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "code_entities_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -354,7 +339,6 @@ export type Database = {
           source_id: string | null
           target_id: string | null
           team_id: string | null
-          user_id: string | null
         }
         Insert: {
           branch_state_id?: string | null
@@ -368,7 +352,6 @@ export type Database = {
           source_id?: string | null
           target_id?: string | null
           team_id?: string | null
-          user_id?: string | null
         }
         Update: {
           branch_state_id?: string | null
@@ -382,7 +365,6 @@ export type Database = {
           source_id?: string | null
           target_id?: string | null
           team_id?: string | null
-          user_id?: string | null
         }
         Relationships: [
           {
@@ -418,13 +400,6 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "code_relationships_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -581,7 +556,6 @@ export type Database = {
           type: string | null
           updated_at: string | null
           user_id: string | null
-          workspace_id: string | null
         }
         Insert: {
           branch_name?: string | null
@@ -606,7 +580,6 @@ export type Database = {
           type?: string | null
           updated_at?: string | null
           user_id?: string | null
-          workspace_id?: string | null
         }
         Update: {
           branch_name?: string | null
@@ -631,7 +604,6 @@ export type Database = {
           type?: string | null
           updated_at?: string | null
           user_id?: string | null
-          workspace_id?: string | null
         }
         Relationships: [
           {
@@ -1161,10 +1133,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      api_user_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
       binary_quantize: {
         Args: { "": string } | { "": unknown }
         Returns: unknown
@@ -1176,32 +1144,12 @@ export type Database = {
       get_repository_diff: {
         Args: { p_repo_id: number; p_branch_name: string; p_team_id: string }
         Returns: {
-          file_path: string
-          details: Json
           entity_type: string
           change_type: string
           entity_name: string
+          file_path: string
+          details: Json
         }[]
-      }
-      gtrgm_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_decompress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_options: {
-        Args: { "": unknown }
-        Returns: undefined
-      }
-      gtrgm_out: {
-        Args: { "": unknown }
-        Returns: unknown
       }
       halfvec_avg: {
         Args: { "": number[] }
@@ -1253,23 +1201,15 @@ export type Database = {
       }
       l2_normalize: {
         Args: { "": string } | { "": unknown } | { "": unknown }
-        Returns: string
+        Returns: unknown
       }
       search_memories: {
-        Args:
-          | {
-              p_team_id: string
-              p_query_embedding: string
-              p_limit?: number
-              p_project_filter?: string[]
-            }
-          | {
-              p_team_id: string
-              p_query_embedding: string
-              p_user_id?: string
-              p_limit?: number
-              p_project_filter?: string[]
-            }
+        Args: {
+          p_team_id: string
+          p_query_embedding: string
+          p_limit?: number
+          p_project_filter?: string[]
+        }
         Returns: {
           id: string
           chunk_id: string
@@ -1281,13 +1221,13 @@ export type Database = {
       }
       search_memories_advanced: {
         Args: {
-          p_branches?: string[]
           p_team_id: string
           p_query?: string
           p_projects?: string[]
           p_users?: string[]
           p_date_from?: string
           p_date_to?: string
+          p_branches?: string[]
           p_has_code?: boolean
           p_topics?: string[]
           p_limit?: number
@@ -1307,22 +1247,6 @@ export type Database = {
           file_paths: string[]
           relevance: number
         }[]
-      }
-      set_api_user_context: {
-        Args: { p_user_id: string }
-        Returns: undefined
-      }
-      set_limit: {
-        Args: { "": number }
-        Returns: number
-      }
-      show_limit: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      show_trgm: {
-        Args: { "": string }
-        Returns: string[]
       }
       sparsevec_out: {
         Args: { "": unknown }
@@ -1587,7 +1511,7 @@ export type Database = {
     }
     Functions: {
       can_insert_object: {
-        Args: { bucketid: string; metadata: Json; owner: string; name: string }
+        Args: { bucketid: string; name: string; owner: string; metadata: Json }
         Returns: undefined
       }
       extension: {
@@ -1612,32 +1536,32 @@ export type Database = {
       list_multipart_uploads_with_delimiter: {
         Args: {
           bucket_id: string
-          next_key_token?: string
-          max_keys?: number
-          delimiter_param: string
-          next_upload_token?: string
           prefix_param: string
+          delimiter_param: string
+          max_keys?: number
+          next_key_token?: string
+          next_upload_token?: string
         }
         Returns: {
+          key: string
           id: string
           created_at: string
-          key: string
         }[]
       }
       list_objects_with_delimiter: {
         Args: {
-          next_token?: string
-          start_after?: string
-          max_keys?: number
-          delimiter_param: string
-          prefix_param: string
           bucket_id: string
+          prefix_param: string
+          delimiter_param: string
+          max_keys?: number
+          start_after?: string
+          next_token?: string
         }
         Returns: {
+          name: string
+          id: string
           metadata: Json
           updated_at: string
-          id: string
-          name: string
         }[]
       }
       operation: {
@@ -1646,7 +1570,6 @@ export type Database = {
       }
       search: {
         Args: {
-          sortorder?: string
           prefix: string
           bucketname: string
           limits?: number
@@ -1654,14 +1577,15 @@ export type Database = {
           offsets?: number
           search?: string
           sortcolumn?: string
+          sortorder?: string
         }
         Returns: {
-          id: string
           name: string
-          metadata: Json
-          last_accessed_at: string
-          created_at: string
+          id: string
           updated_at: string
+          created_at: string
+          last_accessed_at: string
+          metadata: Json
         }[]
       }
     }
@@ -1802,4 +1726,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

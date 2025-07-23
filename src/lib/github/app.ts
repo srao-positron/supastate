@@ -20,7 +20,7 @@ export function getGitHubApp(): App {
   return _app
 }
 
-export async function getInstallationOctokit(installationId: number): Promise<Octokit> {
+export async function getInstallationOctokit(installationId: number) {
   const app = getGitHubApp()
   return await app.getInstallationOctokit(installationId)
 }
@@ -34,7 +34,7 @@ export async function postPRComment(
 ) {
   const octokit = await getInstallationOctokit(installationId)
   
-  return await octokit.issues.createComment({
+  return await (octokit as any).issues.createComment({
     owner,
     repo,
     issue_number: issueNumber,
@@ -58,7 +58,7 @@ export async function createCheckRun(
 ) {
   const octokit = await getInstallationOctokit(installationId)
   
-  return await octokit.checks.create({
+  return await (octokit as any).checks.create({
     owner,
     repo,
     name,
@@ -84,7 +84,7 @@ export async function updateCheckRun(
 ) {
   const octokit = await getInstallationOctokit(installationId)
   
-  return await octokit.checks.update({
+  return await (octokit as any).checks.update({
     owner,
     repo,
     check_run_id: checkRunId,
@@ -102,7 +102,7 @@ export async function getPRDiff(
 ): Promise<string> {
   const octokit = await getInstallationOctokit(installationId)
   
-  const { data } = await octokit.pulls.get({
+  const { data } = await (octokit as any).pulls.get({
     owner,
     repo,
     pull_number: prNumber,
@@ -122,7 +122,7 @@ export async function getPRFiles(
 ) {
   const octokit = await getInstallationOctokit(installationId)
   
-  const { data } = await octokit.pulls.listFiles({
+  const { data } = await (octokit as any).pulls.listFiles({
     owner,
     repo,
     pull_number: prNumber,

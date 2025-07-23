@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { ArrowRight } from 'lucide-react'
 
 export default function HomePage() {
   return (
@@ -12,12 +13,12 @@ export default function HomePage() {
           <p className="mt-4 text-lg text-muted-foreground">
             Cloud-based team collaboration for Camille code intelligence
           </p>
-          <div className="mt-8 flex gap-4 justify-center">
+          <div className="mt-8 flex justify-center">
             <Link href="/auth/login">
-              <Button size="lg">Sign In</Button>
-            </Link>
-            <Link href="/auth/signup">
-              <Button size="lg" variant="outline">Get Started</Button>
+              <Button size="lg">
+                Sign in with GitHub
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </Link>
           </div>
         </div>
@@ -45,16 +46,14 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground mb-4">
+            Ready to supercharge your team's code intelligence?
+          </p>
           <Link href="/auth/login">
-            <Button size="lg">
-              Get Started
+            <Button size="lg" variant="default">
+              Get Started with GitHub
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
-          <Link href="/auth/signup">
-            <Button variant="outline" size="lg">
-              Create Account
             </Button>
           </Link>
         </div>

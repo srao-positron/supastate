@@ -106,7 +106,7 @@ export function generateDemoAgents() {
 }
 
 export function generateDemoEvents(agents: any[], status: string) {
-  const events = []
+  const events: any[] = []
   const eventTypes = [
     'status_update',
     'tool_call',

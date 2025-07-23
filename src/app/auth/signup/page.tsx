@@ -1,9 +1,6 @@
-import { AuthForm } from '@/components/auth/auth-form'
+import { redirect } from 'next/navigation'
 
 export default function SignupPage() {
-  return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <AuthForm mode="signup" />
-    </div>
-  )
+  // Since we're using GitHub SSO only, redirect to login
+  redirect('/auth/login')
 }

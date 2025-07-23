@@ -81,15 +81,28 @@ ADD COLUMN IF NOT EXISTS tools_used TEXT[] DEFAULT '{}',
 ADD COLUMN IF NOT EXISTS message_type TEXT CHECK (message_type IN ('user', 'assistant', 'system', 'tool_use', 'tool_result')),
 ADD COLUMN IF NOT EXISTS has_code BOOLEAN DEFAULT false;
 
--- Add generated search text column for full-text search
+-- Add search text column (will be populated by triggers)
 ALTER TABLE memories 
-ADD COLUMN IF NOT EXISTS search_text TEXT GENERATED ALWAYS AS (
-  content || ' ' || 
-  COALESCE(metadata->>'summary', '') || ' ' ||
-  COALESCE(array_to_string(topics, ' '), '') || ' ' ||
-  COALESCE(array_to_string(file_paths, ' '), '') || ' ' ||
-  COALESCE(project_name, '')
-) STORED;
+ADD COLUMN IF NOT EXISTS search_text TEXT;
+
+-- Create function to update search text
+CREATE OR REPLACE FUNCTION update_memory_search_text()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.search_text = NEW.content || ' ' || 
+    COALESCE(NEW.metadata->>'summary', '') || ' ' ||
+    COALESCE(array_to_string(NEW.topics, ' '), '') || ' ' ||
+    COALESCE(array_to_string(NEW.file_paths, ' '), '') || ' ' ||
+    COALESCE(NEW.project_name, '');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to maintain search text
+CREATE TRIGGER update_memory_search_text_trigger
+BEFORE INSERT OR UPDATE ON memories
+FOR EACH ROW
+EXECUTE FUNCTION update_memory_search_text();
 
 -- Update code_entities for source truth tracking
 ALTER TABLE code_entities

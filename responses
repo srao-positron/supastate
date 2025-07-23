@@ -1,0 +1,55 @@
+  1. Does Camille keep making local database indexes or does it only send to Supastate?
+  - Are you asking if Camille should continue maintaining its local SQLite database for offline work, or switch to being purely a client that
+  relies on Supastate?
+
+Camille uses LanceDB and Kuzu to store memories and object graphs. I'm OK if it becomes a client that purely relies on Supastate. But, the first time an existing user logs into Supastate from Camille (e.g., camille login), we should try to reuse all the existing embeddings and content (migrate their existing content) into Supastate.
+
+BTW, camille login should take them through Supastate auth to get an API key, much like the way claude code does when you run /login.
+
+  - My assumption: Camille should keep its local database for offline functionality and fast local searches, with Supastate as a
+  sync/backup/team collaboration layer. Is this correct?
+
+This is great. I just wasn't sure you had built it this way.
+
+  2. Duplicate prevention logic
+  - You want to ensure we don't store the same memory/code graph multiple times when syncing
+  - Should we use content hashing or session IDs to detect duplicates?
+We probably need a hash don't we... *or* we should use the local chunk ID as an identifier, and if we see the same camille local chunk ID again, we upsert.
+
+  3. Initial sync behavior
+  - Should Camille push ALL historical data on first sync, or just new data going forward?
+  - How much historical data do you typically have locally that would need syncing?
+Well, you can see from my local ~/.camille/ directory - I would take a look. And yes, I kind of expect that users will expect all of their historical data to sync up.
+
+  4. Reusing embeddings
+  - Camille has already generated vector embeddings locally - we should definitely reuse these instead of regenerating
+  - Are the embeddings stored in Camille's SQLite database? What format/model are they from?
+
+They are in LanceDB for the conversation embeddings (memory). The code graphs are in Kuzu. You can see the source code in the ~/camille/ directory. Claude - think carefully and exmaine the camille codebase to understand the structure. In fact, you will need to modify camille to work with supastate (if you haven't done this already).
+
+  5. Personal vs Team workspace
+  - You want to start using Supastate personally without creating a team first
+  - Should we make "personal workspace" the default, with team creation optional?
+Yes.
+
+  6. Empty memory search exceptions
+  - You encountered errors when searching memories with no results
+  - Need to add proper empty state handling
+Yes. Also, make sure your logging is up to date to help you debug issues quickly, please! Supabase already has a logging mechanism (console.log) that you can use for edge functions, as does Vercel. I'd expect you to integrate with these existing logging mechanisms to output thorough logs (console.log gets you plenty BTW) so you can easily trace defects and problems.
+
+  Additional clarifying questions:
+
+  - For the sync strategy, should it be push-only from Camille, or bidirectional?
+Push only from Camille.
+
+  - What's the typical size of a Camille local database you'd want to sync?
+Look at my store in ~/.camille/ to understand.
+
+  - Should sync happen automatically in the background or be user-triggered?
+I think it should happen automatically, but there should be a CLI command in Camille to trigger a sync.
+
+  - Do you want conflict resolution if the same memory exists both locally and in Supastate?
+Yes, ideally you would look at the date and time of the memory (I believe the memories in Camille have a timestamp) and the latest would win, with Camille being the winner if there is ambiguity
+
+  Please clarify these points so I can design the right solution!
+

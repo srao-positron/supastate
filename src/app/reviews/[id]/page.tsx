@@ -38,18 +38,26 @@ export default function ReviewDetailPage() {
   useEffect(() => {
     if (!sessionId) return
 
+    let unsubscribeEvents: (() => void) | null = null
+    let unsubscribeSession: (() => void) | null = null
+
     // Subscribe to real-time events
-    const unsubscribeEvents = subscribeToReviewEvents(sessionId, (event) => {
+    subscribeToReviewEvents(sessionId, (event) => {
       setEvents(prev => [...prev, event])
+    }).then(unsub => {
+      unsubscribeEvents = unsub
     })
 
-    const unsubscribeSession = subscribeToSessionUpdates(sessionId, (updatedSession) => {
+    subscribeToSessionUpdates(sessionId, (updatedSession) => {
       setSession(updatedSession)
+    }).then(unsub => {
+      unsubscribeSession = unsub
     })
 
+    // Cleanup function
     return () => {
-      unsubscribeEvents()
-      unsubscribeSession()
+      if (unsubscribeEvents) unsubscribeEvents()
+      if (unsubscribeSession) unsubscribeSession()
     }
   }, [sessionId])
 

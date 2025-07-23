@@ -30,11 +30,11 @@ export async function analyzeRepository(options: AnalyzeRepositoryOptions) {
 
   // Get repository info
   await onProgress({ current: 10, total: 100, message: 'Fetching repository info...' })
-  const { data: repoData } = await octokit.repos.get({ owner, repo })
+  const { data: repoData } = await (octokit as any).repos.get({ owner, repo })
 
   // Get file tree
   await onProgress({ current: 20, total: 100, message: 'Analyzing file structure...' })
-  const { data: tree } = await octokit.git.getTree({
+  const { data: tree } = await (octokit as any).git.getTree({
     owner,
     repo,
     tree_sha: branch,
@@ -42,7 +42,7 @@ export async function analyzeRepository(options: AnalyzeRepositoryOptions) {
   })
 
   // Filter for code files
-  const codeFiles = tree.tree.filter(item => 
+  const codeFiles = tree.tree.filter((item: any) => 
     item.type === 'blob' && 
     isCodeFile(item.path || '')
   )
@@ -70,7 +70,7 @@ export async function analyzeRepository(options: AnalyzeRepositoryOptions) {
       
       try {
         // Get file content
-        const { data: blob } = await octokit.git.getBlob({
+        const { data: blob } = await (octokit as any).git.getBlob({
           owner,
           repo,
           file_sha: file.sha,
@@ -86,7 +86,7 @@ export async function analyzeRepository(options: AnalyzeRepositoryOptions) {
         const fileRelationships = await extractRelationships(file.path, content, fileEntities)
         relationships.push(...fileRelationships)
       } catch (error) {
-        await onLog(`Error analyzing ${file.path}: ${error.message}`)
+        await onLog(`Error analyzing ${file.path}: ${(error as any).message}`)
       }
     }
   }

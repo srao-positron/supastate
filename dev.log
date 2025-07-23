@@ -3,131 +3,163 @@
 > next dev
 
  ⚠ Port 3000 is in use, trying 3001 instead.
+ ⚠ Port 3001 is in use, trying 3002 instead.
   ▲ Next.js 14.2.5
-  - Local:        http://localhost:3001
+  - Local:        http://localhost:3002
   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 1993ms
- ○ Compiling / ...
- ✓ Compiled / in 1419ms (465 modules)
- GET / 200 in 1505ms
- ✓ Compiled in 73ms (235 modules)
- ✓ Compiled in 83ms (235 modules)
- ✓ Compiled in 62ms (235 modules)
- ✓ Compiled in 52ms (235 modules)
- ✓ Compiled in 55ms (235 modules)
- ✓ Compiled in 50ms (235 modules)
- ✓ Compiled in 60ms (235 modules)
- ✓ Compiled in 47ms (235 modules)
- ✓ Compiled in 49ms (235 modules)
- ✓ Compiled in 60ms (235 modules)
- ✓ Compiled in 52ms (235 modules)
- ✓ Compiled in 79ms (235 modules)
- ✓ Compiled in 57ms (235 modules)
- ✓ Compiled in 54ms (235 modules)
- ✓ Compiled in 53ms (235 modules)
- ✓ Compiled in 23ms (221 modules)
- ✓ Compiled in 50ms (235 modules)
- ✓ Compiled in 20ms (221 modules)
- ✓ Compiled in 62ms (235 modules)
- ✓ Compiled in 21ms (221 modules)
- ✓ Compiled in 60ms (235 modules)
- ✓ Compiled in 57ms (235 modules)
- ✓ Compiled in 62ms (235 modules)
- ✓ Compiled in 23ms (221 modules)
- ✓ Compiled in 64ms (235 modules)
- ✓ Compiled in 75ms (235 modules)
- ✓ Compiled in 57ms (235 modules)
- ✓ Compiled in 20ms (221 modules)
- ✓ Compiled in 79ms (235 modules)
- ✓ Compiled in 77ms (235 modules)
- ✓ Compiled in 60ms (235 modules)
- ✓ Compiled in 52ms (235 modules)
- ✓ Compiled in 63ms (235 modules)
- ✓ Compiled in 78ms (235 modules)
- ✓ Compiled in 64ms (235 modules)
- ✓ Compiled in 66ms (235 modules)
- ✓ Compiled in 65ms (235 modules)
- ✓ Compiled in 68ms (235 modules)
- ✓ Compiled in 63ms (235 modules)
- ✓ Compiled in 22ms (221 modules)
- ✓ Compiled in 87ms (235 modules)
- ✓ Compiled in 63ms (235 modules)
- ✓ Compiled in 58ms (235 modules)
- ✓ Compiled in 57ms (235 modules)
- ✓ Compiled in 66ms (235 modules)
- ✓ Compiled in 63ms (235 modules)
- ✓ Compiled in 58ms (235 modules)
- ✓ Compiled in 58ms (235 modules)
- ✓ Compiled in 58ms (235 modules)
- ✓ Compiled in 57ms (235 modules)
- ✓ Compiled in 57ms (235 modules)
- ✓ Compiled in 56ms (235 modules)
- ✓ Compiled in 75ms (235 modules)
- ✓ Compiled in 61ms (235 modules)
- ✓ Compiled in 62ms (235 modules)
- ✓ Compiled in 82ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 78ms (235 modules)
- ✓ Compiled in 22ms (221 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 82ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 77ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 104ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 81ms (235 modules)
- ✓ Compiled in 22ms (221 modules)
- ✓ Compiled in 74ms (235 modules)
- ✓ Compiled in 61ms (235 modules)
- ✓ Compiled in 80ms (235 modules)
- ✓ Compiled in 87ms (235 modules)
- ✓ Compiled in 80ms (235 modules)
- ✓ Compiled in 93ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 80ms (235 modules)
- ✓ Compiled in 78ms (235 modules)
- ✓ Compiled in 79ms (235 modules)
- ✓ Compiled in 82ms (235 modules)
- ✓ Compiled in 74ms (235 modules)
- ✓ Compiled in 72ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 95ms (235 modules)
- ✓ Compiled in 23ms (221 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 87ms (235 modules)
- ✓ Compiled in 72ms (235 modules)
- ✓ Compiled in 80ms (235 modules)
- ✓ Compiled in 26ms (221 modules)
- ✓ Compiled in 93ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 95ms (235 modules)
- ✓ Compiled in 75ms (235 modules)
- ✓ Compiled in 83ms (235 modules)
- ✓ Compiled in 95ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 88ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 87ms (235 modules)
- ✓ Compiled in 84ms (235 modules)
- ✓ Compiled in 76ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 80ms (235 modules)
- ✓ Compiled in 89ms (235 modules)
- ✓ Compiled in 82ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 88ms (235 modules)
- ✓ Compiled in 78ms (235 modules)
- ✓ Compiled in 74ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 73ms (235 modules)
- ✓ Compiled in 73ms (235 modules)
- ✓ Compiled in 74ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 81ms (235 modules)
- ✓ Compiled in 86ms (235 modules)
- ✓ Compiled in 81ms (235 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
- ✓ Compiled in 92ms (235 modules)
+ ✓ Ready in 1152ms
+ ✓ Compiled /src/middleware in 179ms (484 modules)
+ ✓ Compiled /api/memories/sync in 326ms (520 modules)
+[Memory Sync] Starting sync request
+[Memory Sync] Authenticating with API key
+[Memory Sync] API key hash: 52e9d23f951fe4e288c3df8fffee70fb084d2cf9ea721e80dec258e8d4fde594
+[Memory Sync] Using Supabase URL: http://127.0.0.1:54321
+[Memory Sync] Unexpected error: SyntaxError: Unexpected token '$', ..."edding": [$(printf 0"... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at parseJSONFromBytes (node:internal/deps/undici/undici:5738:19)
+    at successSteps (node:internal/deps/undici/undici:5719:27)
+    at fullyReadBody (node:internal/deps/undici/undici:4609:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async consumeBody (node:internal/deps/undici/undici:5728:7)
+    at async POST (webpack-internal:///(rsc)/./src/app/api/memories/sync/route.ts:110:22)
+    at async /Users/srao/supastate/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:55038
+    at async ek.execute (/Users/srao/supastate/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:45808)
+    at async ek.handle (/Users/srao/supastate/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:56292)
+    at async doRender (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1377:42)
+    at async cacheEntry.responseCache.get.routeKind (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1599:28)
+    at async DevServer.renderToResponseWithComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1507:28)
+    at async DevServer.renderPageComponent (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1931:24)
+    at async DevServer.renderToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13)
+ POST /api/memories/sync 500 in 423ms
+[Memory Sync] Starting sync request
+[Memory Sync] Authenticating with API key
+[Memory Sync] API key hash: 1e4a6d7de84e8628b9d2cd9832388af0af156e5c1e3775bfcf632a5cf9f0875a
+[Memory Sync] Using Supabase URL: http://127.0.0.1:54321
+[Memory Sync] Request body: { teamId: undefined, projectName: 'test-project', chunkCount: 1 }
+[Memory Sync] Upserting 1 chunks
+[Memory Sync] Processing batch 1/1
+[Memory Sync] Successfully upserted 1 records
+[Memory Sync] Sync completed. Success: 1, Errors: 0
+[Memory Sync] Sync status: {
+  workspace: 'user:11111111-1111-1111-1111-111111111111',
+  project_name: 'test-project',
+  sync_type: 'memory',
+  status: 'completed',
+  chunks_synced: 1,
+  chunks_failed: 0,
+  completed_at: '2025-07-23T01:08:12.399Z'
+}
+ POST /api/memories/sync 200 in 40ms
+[Memory Sync] Starting sync request
+[Memory Sync] Authenticating with API key
+[Memory Sync] API key hash: 1e4a6d7de84e8628b9d2cd9832388af0af156e5c1e3775bfcf632a5cf9f0875a
+[Memory Sync] Using Supabase URL: http://127.0.0.1:54321
+[Memory Sync] Request body: { teamId: undefined, projectName: 'test-project', chunkCount: 1 }
+[Memory Sync] Upserting 1 chunks
+[Memory Sync] Processing batch 1/1
+[Memory Sync] Successfully upserted 1 records
+[Memory Sync] Sync completed. Success: 1, Errors: 0
+[Memory Sync] Sync status: {
+  workspace: 'user:11111111-1111-1111-1111-111111111111',
+  project_name: 'test-project',
+  sync_type: 'memory',
+  status: 'completed',
+  chunks_synced: 1,
+  chunks_failed: 0,
+  completed_at: '2025-07-23T01:08:13.213Z'
+}
+ POST /api/memories/sync 200 in 33ms
+ ✓ Compiled in 668ms (685 modules)
+ ✓ Compiled in 85ms (685 modules)
+pi/memories/sync 200 in 355ms
+ ✓ Compiled /_not-found in 280ms (3319 modules)
+ GET /_next/static/css/app/layout.css?v=1753232801731 404 in 333ms
+[Memory Sync] Starting sync request
+[Memory Sync] Authenticating with API key
+[Memory Sync] API key hash: 52e9d23f951fe4e288c3df8fffee70fb084d2cf9ea721e80dec258e8d4fde594
+[Memory Sync] Using Supabase URL: http://127.0.0.1:54321
+[Memory Sync] Unexpected error: SyntaxError: Unexpected token '$', ..."edding": [$(printf 0"... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at parseJSONFromBytes (node:internal/deps/undici/undici:5738:19)
+    at successSteps (node:internal/deps/undici/undici:5719:27)
+    at fullyReadBody (node:internal/deps/undici/undici:4609:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async consumeBody (node:internal/deps/undici/undici:5728:7)
+    at async POST (webpack-internal:///(rsc)/./src/app/api/memories/sync/route.ts:110:22)
+    at async /Users/srao/supastate/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:55038
+    at async ek.execute (/Users/srao/supastate/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:45808)
+    at async ek.handle (/Users/srao/supastate/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:6:56292)
+    at async doRender (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1377:42)
+    at async cacheEntry.responseCache.get.routeKind (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1599:28)
+    at async DevServer.renderToResponseWithComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1507:28)
+    at async DevServer.renderPageComponent (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1931:24)
+    at async DevServer.renderToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13)
+ POST /api/memories/sync 500 in 55ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat '/Users/srao/supastate/.next/server/vendor-chunks/@swc.js'
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving './vendor-chunks/@swc' in /Users/srao/supastate/.next/server for build dependencies doesn't lead to expected result '/Users/srao/supastate/.next/server/vendor-chunks/@swc.js', but to 'Error: Can't resolve './vendor-chunks/@swc' in '/Users/srao/supastate/.next/server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ./vendor-chunks/@swc (expected /Users/srao/supastate/.next/server/vendor-chunks/@swc.js)
+<w>  at file dependencies /Users/srao/supastate/.next/server/webpack-runtime.js
+<w>  at file /Users/srao/supastate/.next/server/webpack-runtime.js
+<w>  at file dependencies /Users/srao/supastate/.next/server/app/api/memories/sync/route.js
+<w>  at file /Users/srao/supastate/.next/server/app/api/memories/sync/route.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/server/require.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/server/require.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/build/utils.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/build/utils.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/build/webpack/loaders/next-app-loader.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/build/webpack/loaders/next-app-loader.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/compiled/loader-runner/LoaderRunner.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/compiled/loader-runner/LoaderRunner.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/compiled/webpack/bundle5.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/compiled/webpack/bundle5.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/compiled/webpack/webpack.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/compiled/webpack/webpack.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/build/webpack/plugins/define-env-plugin.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/build/webpack/plugins/define-env-plugin.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/build/swc/index.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/build/swc/index.js
+<w>  at file dependencies /Users/srao/supastate/node_modules/next/dist/build/webpack/loaders/next-barrel-loader.js
+<w>  at file /Users/srao/supastate/node_modules/next/dist/build/webpack/loaders/next-barrel-loader.js
+<w>  at resolve commonjs /Users/srao/supastate/node_modules/next/dist/build/webpack/loaders/next-barrel-loader.js
+ ✓ Compiled in 159ms (1406 modules)
+ ✓ Compiled /_not-found in 436ms (3324 modules)
+ GET /auth/login 200 in 59ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 649ms (3064 modules)
+ GET /_next/static/css/app/layout.css?v=1753233871717 404 in 726ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 712ms
+ GET /_next/static/chunks/app/auth/login/page.js 404 in 44ms
+ ✓ Compiled in 156ms (1591 modules)
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /_next/static/webpack/8876c242c97f903d.webpack.hot-update.json 404 in 17ms
+ GET /auth/login 200 in 39ms
+ GET /_next/static/css/app/layout.css?v=1753233892062 404 in 9ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 15ms
+ GET /_next/static/chunks/app/auth/login/page.js 404 in 10ms
+ ✓ Compiled in 133ms (1591 modules)
+ ✓ Compiled in 115ms (1591 modules)
+ ✓ Compiled in 240ms (3548 modules)

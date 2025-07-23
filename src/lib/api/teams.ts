@@ -35,7 +35,7 @@ export interface TeamStats {
  * Get the current user's team
  */
 export async function getCurrentTeam(): Promise<Team | null> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -61,7 +61,7 @@ export async function getCurrentTeam(): Promise<Team | null> {
  * Get team members for a given team
  */
 export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   const { data: members, error } = await supabase
     .from("team_members")
@@ -84,7 +84,7 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
  * Get team statistics
  */
 export async function getTeamStats(teamId: string): Promise<TeamStats> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   // Fetch all stats in parallel
   const [
@@ -142,7 +142,7 @@ export async function checkTeamPermission(
   userId: string,
   requiredRole: "owner" | "admin" | "member" | "viewer"
 ): Promise<boolean> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   const { data: member } = await supabase
     .from("team_members")
@@ -160,7 +160,7 @@ export async function checkTeamPermission(
     viewer: 1,
   }
 
-  return roleHierarchy[member.role] >= roleHierarchy[requiredRole]
+  return roleHierarchy[member.role as keyof typeof roleHierarchy] >= roleHierarchy[requiredRole]
 }
 
 /**
@@ -171,7 +171,7 @@ export async function createTeam(
   slug: string,
   ownerId: string
 ): Promise<Team | null> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   // Start a transaction
   const { data: team, error: teamError } = await supabase
@@ -210,7 +210,7 @@ export async function updateTeamSettings(
   teamId: string,
   settings: Record<string, any>
 ): Promise<boolean> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   const { error } = await supabase
     .from("teams")
@@ -251,7 +251,7 @@ export async function removeTeamMember(
   teamId: string,
   userId: string
 ): Promise<boolean> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   const { error } = await supabase
     .from("team_members")
@@ -275,7 +275,7 @@ export async function updateTeamMemberRole(
   userId: string,
   newRole: "admin" | "member" | "viewer"
 ): Promise<boolean> {
-  const supabase = createClient(cookies())
+  const supabase = await createClient()
   
   const { error } = await supabase
     .from("team_members")

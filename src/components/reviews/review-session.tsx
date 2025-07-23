@@ -37,7 +37,8 @@ const statusConfig = {
     color: 'text-yellow-600',
     bgColor: 'bg-yellow-50',
     label: 'Pending',
-    description: 'Review is queued and will start soon'
+    description: 'Review is queued and will start soon',
+    showProgress: false
   },
   running: {
     icon: Clock,
@@ -52,21 +53,24 @@ const statusConfig = {
     color: 'text-green-600',
     bgColor: 'bg-green-50',
     label: 'Completed',
-    description: 'Review completed successfully'
+    description: 'Review completed successfully',
+    showProgress: false
   },
   failed: {
     icon: XCircle,
     color: 'text-red-600',
     bgColor: 'bg-red-50',
     label: 'Failed',
-    description: 'Review encountered an error'
+    description: 'Review encountered an error',
+    showProgress: false
   },
   cancelled: {
     icon: AlertCircle,
     color: 'text-gray-600',
     bgColor: 'bg-gray-50',
     label: 'Cancelled',
-    description: 'Review was cancelled'
+    description: 'Review was cancelled',
+    showProgress: false
   }
 }
 
@@ -82,7 +86,7 @@ export function ReviewSession({ session, events }: ReviewSessionProps) {
   const [progress, setProgress] = useState(0)
   const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set())
   
-  const config = statusConfig[session.status]
+  const config = statusConfig[session.status as keyof typeof statusConfig]
   const StatusIcon = config.icon
 
   useEffect(() => {

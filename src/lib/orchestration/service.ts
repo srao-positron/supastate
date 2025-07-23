@@ -149,8 +149,8 @@ export class SupastateOrchestrationService implements OrchestrationService {
 
     // Run analysis (chunked for large repos)
     const result = await analyzeRepository({
-      repository,
-      branch,
+      repository: repository!,
+      branch: branch!,
       onProgress: async (progress) => {
         await this.updateProgress(job.id, progress)
       },
@@ -175,8 +175,8 @@ export class SupastateOrchestrationService implements OrchestrationService {
 
     // Run multi-agent review
     const result = await runPRReview({
-      prUrl: pr_url,
-      reviewStyle: review_style,
+      prUrl: pr_url!,
+      reviewStyle: review_style!,
       onAgentUpdate: async (agentId, status) => {
         await this.logEvent(job.id, 'agent_update', { agentId, status })
       },

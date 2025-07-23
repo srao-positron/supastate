@@ -26,7 +26,7 @@ export default function EntityDetails({ node, onClose }: EntityDetailsProps) {
         query: `${node.name} ${node.type}`,
         limit: 5,
       });
-      setRelatedMemories(memories);
+      setRelatedMemories(memories.results);
     } catch (error) {
       console.error('Failed to load related memories:', error);
     } finally {

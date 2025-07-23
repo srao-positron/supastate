@@ -303,7 +303,7 @@ export async function getAgentStatistics(teamId: string) {
       }
     }
     agentStats[key].totalReviews++
-    if (agent.review_sessions.status === 'completed') {
+    if (agent.review_sessions && agent.review_sessions.length > 0 && agent.review_sessions[0].status === 'completed') {
       agentStats[key].completedReviews++
     }
   })

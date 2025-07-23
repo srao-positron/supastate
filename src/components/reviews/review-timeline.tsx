@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { 
   Activity,
   MessageSquare,
-  Tool,
+  Wrench,
   Brain,
   CheckCircle2,
   AlertCircle,
@@ -43,7 +43,7 @@ const eventTypeConfig = {
     label: 'Status Update'
   },
   tool_call: {
-    icon: Tool,
+    icon: Wrench,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
     label: 'Tool Usage'

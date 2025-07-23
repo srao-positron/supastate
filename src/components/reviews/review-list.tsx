@@ -49,7 +49,8 @@ const statusConfig = {
     icon: Clock,
     color: 'text-yellow-600',
     bgColor: 'bg-yellow-50',
-    label: 'Pending'
+    label: 'Pending',
+    animate: false
   },
   running: {
     icon: RefreshCw,
@@ -62,19 +63,22 @@ const statusConfig = {
     icon: CheckCircle2,
     color: 'text-green-600',
     bgColor: 'bg-green-50',
-    label: 'Completed'
+    label: 'Completed',
+    animate: false
   },
   failed: {
     icon: XCircle,
     color: 'text-red-600',
     bgColor: 'bg-red-50',
-    label: 'Failed'
+    label: 'Failed',
+    animate: false
   },
   cancelled: {
     icon: AlertCircle,
     color: 'text-gray-600',
     bgColor: 'bg-gray-50',
-    label: 'Cancelled'
+    label: 'Cancelled',
+    animate: false
   }
 }
 

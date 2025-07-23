@@ -30,32 +30,42 @@ export interface MemorySearchResponse {
 export class MemoriesAPI {
   private supabase = createClient()
 
-  private async getTeamId(): Promise<string | null> {
+  private async getWorkspaceInfo(): Promise<{ teamId: string | null; userId: string | null }> {
     const { data: { user } } = await this.supabase.auth.getUser()
-    if (!user) return null
+    if (!user) return { teamId: null, userId: null }
 
+    // Check if user is part of a team
     const { data: teamMember } = await this.supabase
       .from('team_members')
       .select('team_id')
       .eq('user_id', user.id)
       .single()
 
-    return teamMember?.team_id || null
+    return {
+      teamId: teamMember?.team_id || null,
+      userId: user.id
+    }
   }
 
   async searchMemories(params: MemorySearchParams): Promise<MemorySearchResponse> {
     const { query, projectFilter, limit = 20, offset = 0 } = params
 
     try {
-      const teamId = await this.getTeamId()
-      if (!teamId) throw new Error('No team found')
+      const { teamId, userId } = await this.getWorkspaceInfo()
+      if (!teamId && !userId) throw new Error('Not authenticated')
 
       let queryBuilder = this.supabase
         .from('memories')
         .select('*', { count: 'exact' })
-        .eq('team_id', teamId)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
+      
+      // Filter by workspace (team or personal)
+      if (teamId) {
+        queryBuilder = queryBuilder.eq('team_id', teamId)
+      } else {
+        queryBuilder = queryBuilder.eq('user_id', userId).is('team_id', null)
+      }
 
       // Only apply text search if query is not empty
       if (query && query.trim()) {
@@ -84,15 +94,22 @@ export class MemoriesAPI {
 
   async getMemory(id: string): Promise<Memory | null> {
     try {
-      const teamId = await this.getTeamId()
-      if (!teamId) return null
+      const { teamId, userId } = await this.getWorkspaceInfo()
+      if (!teamId && !userId) return null
 
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from('memories')
         .select('*')
         .eq('id', id)
-        .eq('team_id', teamId)
-        .single()
+      
+      // Filter by workspace
+      if (teamId) {
+        query = query.eq('team_id', teamId)
+      } else {
+        query = query.eq('user_id', userId).is('team_id', null)
+      }
+      
+      const { data, error } = await query.single()
 
       if (error) throw error
       return data
@@ -104,22 +121,30 @@ export class MemoriesAPI {
 
   async getRelatedMemories(id: string, limit = 5): Promise<Memory[]> {
     try {
-      const teamId = await this.getTeamId()
-      if (!teamId) return []
+      const { teamId, userId } = await this.getWorkspaceInfo()
+      if (!teamId && !userId) return []
 
       // First get the memory to find its project
       const memory = await this.getMemory(id)
       if (!memory) return []
 
       // Get other memories from the same project
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from('memories')
         .select('*')
-        .eq('team_id', teamId)
         .eq('project_name', memory.project_name)
         .neq('id', id)
         .limit(limit)
         .order('created_at', { ascending: false })
+      
+      // Filter by workspace
+      if (teamId) {
+        query = query.eq('team_id', teamId)
+      } else {
+        query = query.eq('user_id', userId).is('team_id', null)
+      }
+      
+      const { data, error } = await query
 
       if (error) throw error
       return data || []
@@ -131,14 +156,22 @@ export class MemoriesAPI {
 
   async getProjects(): Promise<string[]> {
     try {
-      const teamId = await this.getTeamId()
-      if (!teamId) return []
+      const { teamId, userId } = await this.getWorkspaceInfo()
+      if (!teamId && !userId) return []
 
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from('memories')
         .select('project_name')
-        .eq('team_id', teamId)
         .order('project_name')
+      
+      // Filter by workspace
+      if (teamId) {
+        query = query.eq('team_id', teamId)
+      } else {
+        query = query.eq('user_id', userId).is('team_id', null)
+      }
+      
+      const { data, error } = await query
 
       if (error) throw error
 
@@ -156,20 +189,34 @@ export class MemoriesAPI {
     projectCounts: Record<string, number>
   }> {
     try {
-      const teamId = await this.getTeamId()
-      if (!teamId) return { totalMemories: 0, projectCounts: {} }
+      const { teamId, userId } = await this.getWorkspaceInfo()
+      if (!teamId && !userId) return { totalMemories: 0, projectCounts: {} }
 
       // Get total count
-      const { count: totalCount } = await this.supabase
+      let countQuery = this.supabase
         .from('memories')
         .select('*', { count: 'exact', head: true })
-        .eq('team_id', teamId)
+      
+      if (teamId) {
+        countQuery = countQuery.eq('team_id', teamId)
+      } else {
+        countQuery = countQuery.eq('user_id', userId).is('team_id', null)
+      }
+      
+      const { count: totalCount } = await countQuery
 
       // Get counts by project
-      const { data: projectData, error } = await this.supabase
+      let projectQuery = this.supabase
         .from('memories')
         .select('project_name')
-        .eq('team_id', teamId)
+      
+      if (teamId) {
+        projectQuery = projectQuery.eq('team_id', teamId)
+      } else {
+        projectQuery = projectQuery.eq('user_id', userId).is('team_id', null)
+      }
+      
+      const { data: projectData, error } = await projectQuery
 
       if (error) throw error
 
@@ -193,3 +240,4 @@ export class MemoriesAPI {
 }
 
 export const memoriesAPI = new MemoriesAPI()
+export const searchMemories = (params: MemorySearchParams) => memoriesAPI.searchMemories(params)
