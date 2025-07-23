@@ -10,16 +10,36 @@ import { createHash } from 'crypto'
 
 export async function POST(request: Request) {
   try {
-    // Get the Supabase access token from the request
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Missing authorization token' },
-        { status: 401 }
-      )
-    }
+    const body = await request.json()
+    const { code } = body
     
-    const accessToken = authHeader.substring(7)
+    // Support both code exchange and bearer token
+    let accessToken: string | null = null
+    
+    if (code) {
+      // Exchange code for session
+      const supabase = await createClient()
+      const { data: authData, error: authError } = await supabase.auth.exchangeCodeForSession(code)
+      
+      if (authError || !authData.session) {
+        return NextResponse.json(
+          { error: 'Invalid authorization code' },
+          { status: 401 }
+        )
+      }
+      
+      accessToken = authData.session.access_token
+    } else {
+      // Get token from header
+      const authHeader = request.headers.get('authorization')
+      if (!authHeader?.startsWith('Bearer ')) {
+        return NextResponse.json(
+          { error: 'Missing authorization token or code' },
+          { status: 401 }
+        )
+      }
+      accessToken = authHeader.substring(7)
+    }
     
     // Create a Supabase client with the user's token
     const supabase = await createClient()
