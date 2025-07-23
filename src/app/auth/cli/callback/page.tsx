@@ -77,7 +77,7 @@ function CLICallbackContent() {
   }, [code, callbackPort]);
 
   const copyCommand = async () => {
-    const command = `camille supastate enable --url https://service.supastate.ai --api-key ${apiKey}`;
+    const command = `camille supastate enable --url https://www.supastate.ai --api-key ${apiKey}`;
     await navigator.clipboard.writeText(command);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -129,7 +129,7 @@ function CLICallbackContent() {
             <label className="text-sm font-medium">If the CLI didn't receive it, copy this command:</label>
             <div className="p-3 bg-muted rounded-md">
               <code className="text-sm break-all">
-                camille supastate enable --url https://service.supastate.ai --api-key {apiKey}
+                camille supastate enable --url https://www.supastate.ai --api-key {apiKey}
               </code>
             </div>
             <Button 
