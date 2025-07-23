@@ -49,10 +49,18 @@ async function processEmbeddings() {
       // Process chunks
       const promises = memoryChunks.map(async (chunk) => {
         try {
+          // Truncate content if it's too large (roughly 4 chars per token)
+          let content = chunk.content
+          const maxChars = 8192 * 4 // ~32k characters for 8k tokens
+          if (content.length > maxChars) {
+            console.log(`[Process Embeddings] Truncating chunk ${chunk.id} from ${content.length} to ${maxChars} chars`)
+            content = content.substring(0, maxChars)
+          }
+          
           const embedding = await openai.embeddings.create({
-            model: 'text-embedding-3-small',
-            input: chunk.content,
-            dimensions: 1536,
+            model: 'text-embedding-3-large',
+            input: content,
+            dimensions: 3072,
           })
           
           // Insert into memories table
@@ -71,7 +79,7 @@ async function processEmbeddings() {
               team_id: chunk.workspace_id.startsWith('team:') ? 
                 chunk.workspace_id.substring(5) : null,
             }, {
-              onConflict: 'chunk_id',
+              onConflict: 'workspace_id,chunk_id',
               ignoreDuplicates: false,
             })
           
