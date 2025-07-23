@@ -50,16 +50,11 @@ function AuthCallbackContent() {
           router.push('/dashboard');
         }
       } else {
-        // No hash tokens, check for code parameter (server-side flow)
-        const code = searchParams.get('code');
-        if (code) {
-          // Server will handle this
-          console.log('[Auth Callback Page] Code flow detected, server will handle');
-        } else {
-          // No auth data
-          console.error('[Auth Callback Page] No auth data found');
-          router.push('/auth/login?error=no_auth_data');
-        }
+        // No hash tokens, server-side flow will handle code exchange
+        console.log('[Auth Callback Page] No implicit flow tokens, waiting for server-side processing');
+        
+        // The route handler will process the code exchange
+        // Just show loading state
       }
     };
     

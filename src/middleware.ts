@@ -9,6 +9,15 @@ export async function middleware(request: NextRequest) {
   if (code && request.nextUrl.pathname === '/') {
     const url = new URL('/auth/callback', request.url)
     url.searchParams.set('code', code)
+    // Preserve CLI parameters if present
+    const cliParam = searchParams.get('cli')
+    const portParam = searchParams.get('port')
+    if (cliParam) {
+      url.searchParams.set('cli', cliParam)
+    }
+    if (portParam) {
+      url.searchParams.set('port', portParam)
+    }
     return NextResponse.redirect(url)
   }
 
