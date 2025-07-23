@@ -83,8 +83,9 @@
  POST /api/memories/sync 200 in 33ms
  ✓ Compiled in 668ms (685 modules)
  ✓ Compiled in 85ms (685 modules)
-pi/memories/sync 200 in 355ms
- ✓ Compiled /_not-found in 280ms (3319 modules)
+ ✓ Compiled in 48ms (685 modules)
+ ✓ Compiled in 46ms (685 modules)
+odules)
  GET /_next/static/css/app/layout.css?v=1753232801731 404 in 333ms
 [Memory Sync] Starting sync request
 [Memory Sync] Authenticating with API key
@@ -163,3 +164,9 @@ pi/memories/sync 200 in 355ms
  ✓ Compiled in 133ms (1591 modules)
  ✓ Compiled in 115ms (1591 modules)
  ✓ Compiled in 240ms (3548 modules)
+ ✓ Compiled in 176ms (1588 modules)
+ ✓ Compiled in 237ms (3543 modules)
+ ✓ Compiled in 118ms (1588 modules)
+ ✓ Compiled in 171ms (3543 modules)
+ ✓ Compiled in 145ms (1588 modules)
+ ✓ Compiled in 119ms (1588 modules)
