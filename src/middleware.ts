@@ -2,6 +2,16 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Handle auth callback - redirect code parameter to /auth/callback
+  const { searchParams } = request.nextUrl
+  const code = searchParams.get('code')
+  
+  if (code && request.nextUrl.pathname === '/') {
+    const url = new URL('/auth/callback', request.url)
+    url.searchParams.set('code', code)
+    return NextResponse.redirect(url)
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
