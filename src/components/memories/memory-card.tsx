@@ -9,6 +9,9 @@ import { Memory } from '@/lib/api/memories'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { RelatedMemories } from './related-memories'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { MemoryActions, MemoryTags } from './memory-explorer-enhancements'
 
 interface MemoryCardProps {
   memory: Memory
@@ -38,46 +41,14 @@ export function MemoryCard({
     }
   }
 
-  // Extract code blocks from content
-  const extractCodeBlocks = (content: string) => {
-    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g
-    const blocks: Array<{ language: string; code: string; index: number }> = []
-    let match
-    let lastIndex = 0
-    const parts: Array<{ type: 'text' | 'code'; content: string; language?: string }> = []
-
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-      // Add text before code block
-      if (match.index > lastIndex) {
-        parts.push({
-          type: 'text',
-          content: content.slice(lastIndex, match.index)
-        })
-      }
-
-      // Add code block
-      parts.push({
-        type: 'code',
-        content: match[2].trim(),
-        language: match[1] || 'plaintext'
-      })
-
-      lastIndex = match.index + match[0].length
-    }
-
-    // Add remaining text
-    if (lastIndex < content.length) {
-      parts.push({
-        type: 'text',
-        content: content.slice(lastIndex)
-      })
-    }
-
-    return parts.length > 0 ? parts : [{ type: 'text' as const, content }]
+  // Extract first paragraph for preview
+  const getPreview = (content: string) => {
+    const firstParagraph = content.split('\n\n')[0]
+    const preview = firstParagraph.slice(0, 150)
+    return preview + (firstParagraph.length > 150 ? '...' : '')
   }
 
-  const contentParts = extractCodeBlocks(memory.content)
-  const preview = memory.content.slice(0, 150) + (memory.content.length > 150 ? '...' : '')
+  const preview = getPreview(memory.content)
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -110,19 +81,23 @@ export function MemoryCard({
                 </span>
               </div>
             </div>
+            <MemoryTags memory={memory} />
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleToggle}
-            className="ml-2"
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <MemoryActions memory={memory} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggle}
+              className="ml-2"
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -130,35 +105,79 @@ export function MemoryCard({
           <p className="text-sm text-muted-foreground line-clamp-3">{preview}</p>
         ) : (
           <div className="space-y-3">
-            {contentParts.map((part, index) => {
-              if (part.type === 'text') {
-                return (
-                  <p key={index} className="text-sm whitespace-pre-wrap">
-                    {part.content}
-                  </p>
-                )
-              } else {
-                return (
-                  <div key={index} className="relative">
-                    <div className="absolute top-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-                      {part.language}
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ node, inline, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || '')
+                    const language = match ? match[1] : 'plaintext'
+                    
+                    if (!inline) {
+                      return (
+                        <div className="relative my-4">
+                          <div className="absolute top-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded z-10">
+                            {language}
+                          </div>
+                          <SyntaxHighlighter
+                            language={language}
+                            style={vscDarkPlus}
+                            customStyle={{
+                              margin: 0,
+                              borderRadius: '0.375rem',
+                              fontSize: '0.875rem',
+                            }}
+                            showLineNumbers
+                            {...props}
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        </div>
+                      )
+                    }
+                    
+                    return (
+                      <code className="bg-muted px-1 py-0.5 rounded text-sm" {...props}>
+                        {children}
+                      </code>
+                    )
+                  },
+                  // Custom styling for other elements
+                  p: ({ children }) => <p className="mb-4 leading-relaxed">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc pl-6 mb-4">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal pl-6 mb-4">{children}</ol>,
+                  li: ({ children }) => <li className="mb-1">{children}</li>,
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic my-4">
+                      {children}
+                    </blockquote>
+                  ),
+                  h1: ({ children }) => <h1 className="text-2xl font-bold mb-4 mt-6">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-xl font-semibold mb-3 mt-5">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-lg font-semibold mb-2 mt-4">{children}</h3>,
+                  h4: ({ children }) => <h4 className="text-base font-semibold mb-2 mt-3">{children}</h4>,
+                  hr: () => <hr className="my-6 border-muted-foreground/30" />,
+                  a: ({ href, children }) => (
+                    <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                      {children}
+                    </a>
+                  ),
+                  table: ({ children }) => (
+                    <div className="overflow-x-auto my-4">
+                      <table className="min-w-full divide-y divide-border">{children}</table>
                     </div>
-                    <SyntaxHighlighter
-                      language={part.language}
-                      style={vscDarkPlus}
-                      customStyle={{
-                        margin: 0,
-                        borderRadius: '0.375rem',
-                        fontSize: '0.875rem',
-                      }}
-                      showLineNumbers
-                    >
-                      {part.content}
-                    </SyntaxHighlighter>
-                  </div>
-                )
-              }
-            })}
+                  ),
+                  th: ({ children }) => (
+                    <th className="px-3 py-2 text-left text-sm font-semibold">{children}</th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="px-3 py-2 text-sm">{children}</td>
+                  ),
+                }}
+              >
+                {memory.content}
+              </ReactMarkdown>
+            </div>
             {memory.metadata && Object.keys(memory.metadata).length > 0 && (
               <div className="mt-4 pt-4 border-t">
                 <h4 className="text-xs font-semibold text-muted-foreground mb-2">Metadata</h4>

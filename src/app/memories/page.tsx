@@ -6,8 +6,14 @@ import { MemorySearch } from '@/components/memories/memory-search'
 import { MemoryList } from '@/components/memories/memory-list'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
 import { memoriesAPI, Memory, MemorySearchResponse } from '@/lib/api/memories'
 import { useToast } from '@/hooks/use-toast'
+import { 
+  QuickActionsBar, 
+  TimelineView, 
+  MemoryInsights 
+} from '@/components/memories/memory-explorer-enhancements'
 
 export default function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[]>([])
@@ -15,6 +21,8 @@ export default function MemoriesPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchResponse, setSearchResponse] = useState<MemorySearchResponse | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'timeline'>('list')
+  const [showInsights, setShowInsights] = useState(false)
   const [stats, setStats] = useState({
     totalMemories: 0,
     projectCounts: {} as Record<string, number>,
@@ -182,18 +190,44 @@ export default function MemoriesPage() {
           isSearching={isLoading}
         />
 
-        <MemoryList
-          memories={memories}
-          isLoading={isLoading}
-          error={error}
-          hasMore={searchResponse?.hasMore || false}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          showSimilarity={true}
-          showRelated={true}
-          onRelatedMemoryClick={handleRelatedMemoryClick}
+        {/* Quick Actions and View Toggle */}
+        <QuickActionsBar 
+          currentView={viewMode}
+          onViewChange={setViewMode}
         />
+
+        {/* Memory Insights (toggleable) */}
+        {memories.length > 0 && (
+          <div className="space-y-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowInsights(!showInsights)}
+            >
+              {showInsights ? 'Hide' : 'Show'} Insights
+            </Button>
+            
+            {showInsights && <MemoryInsights memories={memories} />}
+          </div>
+        )}
+
+        {/* Memory Display based on view mode */}
+        {viewMode === 'timeline' ? (
+          <TimelineView memories={memories} />
+        ) : (
+          <MemoryList
+            memories={memories}
+            isLoading={isLoading}
+            error={error}
+            hasMore={searchResponse?.hasMore || false}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+            showSimilarity={true}
+            showRelated={true}
+            onRelatedMemoryClick={handleRelatedMemoryClick}
+          />
+        )}
       </div>
     </div>
   )

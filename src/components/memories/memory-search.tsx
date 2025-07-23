@@ -31,7 +31,7 @@ export function MemorySearch({
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [showFilters, setShowFilters] = useState(false)
   
-  const debouncedQuery = useDebounce(query, 300)
+  const debouncedQuery = useDebounce(query, 1000) // Increased to 1 second for large datasets
 
   // Load available projects
   useEffect(() => {
@@ -46,14 +46,30 @@ export function MemorySearch({
     loadProjects()
   }, [])
 
-  // Trigger search when query or filters change
-  useEffect(() => {
+  // Manual search handler
+  const handleSearch = useCallback(() => {
     const projectFilter = selectedProject === 'all' ? undefined : [selectedProject]
-    onSearch(debouncedQuery, projectFilter)
+    onSearch(query, projectFilter)
     if (onProjectFilterChange && projectFilter) {
       onProjectFilterChange(projectFilter)
     }
-  }, [debouncedQuery, selectedProject, onSearch, onProjectFilterChange])
+  }, [query, selectedProject, onSearch, onProjectFilterChange])
+
+  // Auto-search on Enter key
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
+  // Optional auto-search (can be disabled for very large datasets)
+  const [autoSearch, setAutoSearch] = useState(false)
+  
+  useEffect(() => {
+    if (autoSearch && debouncedQuery !== undefined) {
+      handleSearch()
+    }
+  }, [debouncedQuery, selectedProject, autoSearch, handleSearch])
 
   const handleClearSearch = () => {
     setQuery('')
@@ -67,9 +83,10 @@ export function MemorySearch({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search memories..."
+            placeholder="Search memories... (Press Enter to search)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyPress={handleKeyPress}
             className="pl-10 pr-10"
             disabled={isSearching}
           />
@@ -84,6 +101,13 @@ export function MemorySearch({
             </Button>
           )}
         </div>
+        <Button
+          onClick={handleSearch}
+          disabled={isSearching}
+          variant="default"
+        >
+          Search
+        </Button>
         <Button
           variant="outline"
           size="icon"
