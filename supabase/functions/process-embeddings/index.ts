@@ -7,8 +7,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://deno.land/x/openai@v4.20.1/mod.ts'
 
-const BATCH_SIZE = parseInt(Deno.env.get('BATCH_SIZE') || '50')
-const PARALLEL_WORKERS = parseInt(Deno.env.get('PARALLEL_WORKERS') || '10')
+const BATCH_SIZE = parseInt(Deno.env.get('BATCH_SIZE') || '5') // Reduced for 5s timeout
+const PARALLEL_WORKERS = parseInt(Deno.env.get('PARALLEL_WORKERS') || '3') // Reduced for 5s timeout
 const RATE_LIMIT_DELAY = parseInt(Deno.env.get('RATE_LIMIT_DELAY') || '1000') // ms
 
 // OpenAI rate limits for embeddings (ada-002)
