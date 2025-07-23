@@ -103,7 +103,11 @@ export function MemoryCard({
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                <span>{new Date(memory.created_at).toLocaleDateString()}</span>
+                <span>
+                  {memory.metadata?.startTime 
+                    ? new Date(memory.metadata.startTime).toLocaleDateString() 
+                    : new Date(memory.created_at).toLocaleDateString()}
+                </span>
               </div>
             </div>
           </div>

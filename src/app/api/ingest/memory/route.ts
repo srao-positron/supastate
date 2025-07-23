@@ -15,12 +15,19 @@ const memoryChunkSchema = z.object({
   content: z.string(),
   metadata: z.object({
     timestamp: z.string().optional(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
     filePaths: z.array(z.string()).optional(),
     messageType: z.enum(['user', 'assistant']).optional(),
     hasCode: z.boolean().optional(),
     codeLanguage: z.string().optional(),
     summary: z.string().optional(),
-  }).optional(),
+    sessionId: z.string().optional(),
+    projectPath: z.string().optional(),
+    topics: z.array(z.string()).optional(),
+    chunkIndex: z.number().optional(),
+    messageCount: z.number().optional(),
+  }).passthrough().optional(),
 })
 
 const requestSchema = z.object({
