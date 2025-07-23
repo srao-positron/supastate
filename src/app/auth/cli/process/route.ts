@@ -98,7 +98,7 @@ export async function GET(request: Request) {
         <body>
           <div class="container">
             ${action === 'created' ? `
-              <h1 class="success">✅ Authentication Successful!</h1>
+              <h1 class="success">✓ Authentication Successful!</h1>
               <p>Your API key has been created and sent to Camille CLI.</p>
               <p>You can close this window and return to your terminal.</p>
               <div class="code">
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
                 camille supastate enable --url https://www.supastate.ai --api-key ${apiKey}
               </div>
             ` : `
-              <h1 class="error">⚠️ API Key Already Exists</h1>
+              <h1 class="error">⚠ API Key Already Exists</h1>
               <p>You already have an API key for Camille CLI.</p>
               <p>For security reasons, we cannot show existing keys.</p>
               <p>To generate a new key, please revoke the existing one in the Supastate dashboard.</p>
