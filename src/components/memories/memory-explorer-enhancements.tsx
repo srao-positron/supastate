@@ -12,7 +12,10 @@ import {
   Download,
   Copy,
   Link,
-  MessageSquare
+  MessageSquare,
+  Database,
+  TrendingUp,
+  Brain
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -222,7 +225,7 @@ interface MemoryInsightsProps {
   memories: Memory[]
 }
 
-export function MemoryInsights({ memories }: MemoryInsightsProps) {
+export function MemoryInsights({ memories, totalMemories, projectCount }: MemoryInsightsProps & { totalMemories: number; projectCount: number }) {
   // Calculate insights
   const totalWords = memories.reduce((acc, m) => acc + m.content.split(' ').length, 0)
   const avgWordsPerMemory = memories.length > 0 ? Math.round(totalWords / memories.length) : 0
@@ -246,26 +249,36 @@ export function MemoryInsights({ memories }: MemoryInsightsProps) {
   ).sort(([, a], [, b]) => b - a)[0]
   
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+    <div className="grid grid-cols-3 md:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
       <div className="text-center">
-        <Sparkles className="h-8 w-8 mx-auto mb-2 text-primary" />
-        <p className="text-2xl font-bold">{avgWordsPerMemory}</p>
-        <p className="text-xs text-muted-foreground">Avg words/memory</p>
+        <Database className="h-6 w-6 mx-auto mb-1 text-primary" />
+        <p className="text-xl font-bold">{totalMemories.toLocaleString()}</p>
+        <p className="text-xs text-muted-foreground">Total Memories</p>
       </div>
       <div className="text-center">
-        <MessageSquare className="h-8 w-8 mx-auto mb-2 text-primary" />
-        <p className="text-2xl font-bold">{messageTypes.user || 0}</p>
-        <p className="text-xs text-muted-foreground">User messages</p>
+        <TrendingUp className="h-6 w-6 mx-auto mb-1 text-primary" />
+        <p className="text-xl font-bold">{projectCount}</p>
+        <p className="text-xs text-muted-foreground">Projects</p>
       </div>
       <div className="text-center">
-        <BookOpen className="h-8 w-8 mx-auto mb-2 text-primary" />
-        <p className="text-2xl font-bold">{messageTypes.assistant || 0}</p>
-        <p className="text-xs text-muted-foreground">Assistant responses</p>
+        <Brain className="h-6 w-6 mx-auto mb-1 text-primary" />
+        <p className="text-xl font-bold">{topProject?.[0] || 'N/A'}</p>
+        <p className="text-xs text-muted-foreground">Most Active</p>
       </div>
       <div className="text-center">
-        <FileText className="h-8 w-8 mx-auto mb-2 text-primary" />
-        <p className="text-2xl font-bold">{topProject?.[0] || 'N/A'}</p>
-        <p className="text-xs text-muted-foreground">Most active project</p>
+        <Sparkles className="h-6 w-6 mx-auto mb-1 text-primary" />
+        <p className="text-xl font-bold">{avgWordsPerMemory}</p>
+        <p className="text-xs text-muted-foreground">Avg Words</p>
+      </div>
+      <div className="text-center">
+        <MessageSquare className="h-6 w-6 mx-auto mb-1 text-primary" />
+        <p className="text-xl font-bold">{messageTypes.user || 0}</p>
+        <p className="text-xs text-muted-foreground">User Msgs</p>
+      </div>
+      <div className="text-center">
+        <BookOpen className="h-6 w-6 mx-auto mb-1 text-primary" />
+        <p className="text-xl font-bold">{messageTypes.assistant || 0}</p>
+        <p className="text-xs text-muted-foreground">AI Responses</p>
       </div>
     </div>
   )

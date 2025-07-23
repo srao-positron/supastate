@@ -150,7 +150,12 @@ export function MemoryActivityCharts({ memories }: MemoryActivityChartsProps) {
               className="h-full"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hourlyDistribution} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                <BarChart data={hourlyDistribution} margin={{ top: 5, right: 5, bottom: 15, left: 5 }}>
+                  <XAxis 
+                    dataKey="hour" 
+                    tick={{ fontSize: 10 }}
+                    interval={0}
+                  />
                   <Bar 
                     dataKey="count" 
                     fill="var(--color-count)" 

@@ -2,30 +2,27 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
-const CLAUDE_MODEL = 'claude-3-5-sonnet-20241022'
+const CLAUDE_MODEL = 'claude-3-opus-20240229'
 
 async function generateSummary(projectName: string, memories: any[]): Promise<string> {
   const recentMemories = memories
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 50) // Take most recent 50 memories
-    .map(m => `[${new Date(m.created_at).toLocaleString()}] ${m.content}`)
-    .join('\n\n---\n\n')
+    .slice(0, 30) // Take most recent 30 memories for better focus
+    .map(m => m.content)
+    .join('\n\n')
 
-  const prompt = `You are analyzing the conversation history for a software project called "${projectName}". 
-Based on the recent memories below, provide a concise markdown summary of:
+  const prompt = `Analyze this project "${projectName}" and write ONE insightful paragraph (4-6 sentences) that captures:
+- What the project fundamentally does/solves
+- The current implementation status and recent progress
+- Key technical decisions or challenges being addressed
+- The immediate next steps or blockers
 
-1. **Current State**: What is the current state of the project based on recent discussions?
-2. **Recent Work**: What has been worked on recently?
-3. **Key Features**: What are the main features or components discussed?
-4. **Technical Stack**: What technologies, frameworks, or tools are being used?
-5. **Next Steps**: What are the apparent next steps or TODOs based on the conversations?
+Focus on insights, not just listing features. Write as if briefing a technical lead who needs to quickly understand the project's essence and current state.
 
-Keep the summary focused on technical aspects and actionable insights. Use markdown formatting with headers, bullets, and code blocks where appropriate.
-
-Recent Memories:
+Recent conversations:
 ${recentMemories}
 
-Generate a comprehensive but concise project summary:`
+Write a single paragraph summary:`
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -65,17 +62,20 @@ serve(async (req) => {
     const { data: projects, error: projectsError } = await supabase
       .from('memories')
       .select('project_name, team_id, user_id, created_at')
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
-
+      .limit(10000) // Limit to prevent timeout
+    
     if (projectsError) throw projectsError
-
+    
+    console.log(`[Generate Summaries] Retrieved ${projects?.length || 0} memory rows`)
+    
     // Group by project and workspace
     const projectMap = new Map<string, { workspace_id: string; latest: string }>()
     projects?.forEach(p => {
       const workspace_id = p.team_id || p.user_id
       const key = `${workspace_id}:${p.project_name}`
-      if (!projectMap.has(key)) {
+      if (!projectMap.has(key) || new Date(p.created_at) > new Date(projectMap.get(key)!.latest)) {
         projectMap.set(key, {
           workspace_id: workspace_id,
           latest: p.created_at
@@ -84,24 +84,39 @@ serve(async (req) => {
     })
 
     console.log(`[Generate Summaries] Found ${projectMap.size} projects with recent activity`)
+    console.log(`[Generate Summaries] Projects:`, Array.from(projectMap.keys()))
 
     // Process each project
     const summaryPromises = Array.from(projectMap.entries()).map(async ([key, info]) => {
-      const [workspace_id, project_name] = key.split(':')
+      // Split only on first colon to handle project names with colons
+      const colonIndex = key.indexOf(':')
+      const workspace_id = key.substring(0, colonIndex)
+      const project_name = key.substring(colonIndex + 1)
       
-      // Check if summary needs update
+      // Check if summary exists and when it was last updated
       const { data: existingSummary } = await supabase
         .from('project_summaries')
-        .select('last_memory_timestamp')
+        .select('last_memory_timestamp, updated_at')
         .eq('workspace_id', workspace_id)
         .eq('project_name', project_name)
         .single()
 
-      // Skip if summary is up to date
-      if (existingSummary?.last_memory_timestamp && 
-          new Date(existingSummary.last_memory_timestamp) >= new Date(info.latest)) {
-        console.log(`[Generate Summaries] Skipping ${project_name} - summary up to date`)
-        return null
+      // Skip if:
+      // 1. Summary exists AND is up to date (no new memories)
+      // 2. Summary was updated less than 15 minutes ago (even if new memories exist)
+      if (existingSummary) {
+        const hasNewMemories = new Date(existingSummary.last_memory_timestamp) < new Date(info.latest)
+        const minutesSinceUpdate = (Date.now() - new Date(existingSummary.updated_at).getTime()) / (1000 * 60)
+        
+        if (!hasNewMemories) {
+          console.log(`[Generate Summaries] Skipping ${project_name} - no new memories`)
+          return null
+        }
+        
+        if (minutesSinceUpdate < 15) {
+          console.log(`[Generate Summaries] Skipping ${project_name} - updated ${Math.round(minutesSinceUpdate)} minutes ago`)
+          return null
+        }
       }
 
       // Get memories for this project based on team_id or user_id
