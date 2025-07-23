@@ -139,18 +139,19 @@ Authorization: x-api-key: YOUR_API_KEY
 
 To connect your local Camille instance to Supastate:
 
-1. Get your team API key from Supastate dashboard
-2. Configure Camille:
+1. Login to Supastate from Camille CLI:
 ```bash
-camille config set-supastate-url https://your-supastate.vercel.app
-camille config set-supastate-key YOUR_API_KEY
-camille config set-team-id YOUR_TEAM_ID
+camille supastate login
 ```
 
-3. Enable sync:
+This will open your browser for GitHub OAuth authentication and automatically configure your API key.
+
+2. Verify connection:
 ```bash
-camille supastate enable-sync
+camille supastate status
 ```
+
+3. Your memories and code will now automatically sync to Supastate for server-side processing and enhanced search capabilities.
 
 ## Multi-Agent Review System
 
