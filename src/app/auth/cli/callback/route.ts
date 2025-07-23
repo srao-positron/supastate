@@ -7,27 +7,41 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   const port = searchParams.get('port') || '8899'
   
+  console.log('[CLI Auth Debug] Received callback with:', {
+    code: code ? 'present' : 'missing',
+    port,
+    url: request.url,
+    headers: Object.fromEntries(request.headers.entries())
+  })
+  
   if (!code) {
+    console.error('[CLI Auth Debug] No code in callback URL')
     return NextResponse.redirect(new URL('/auth/login?error=no_code', request.url))
   }
   
   try {
     // Exchange code for session
+    console.log('[CLI Auth Debug] Exchanging code for session...')
     const supabase = await createClient()
     const { data: authData, error: authError } = await supabase.auth.exchangeCodeForSession(code)
     
     if (authError || !authData.session) {
-      console.error('[CLI Auth] Failed to exchange code:', authError)
+      console.error('[CLI Auth Debug] Failed to exchange code:', authError)
       return NextResponse.redirect(new URL('/auth/login?error=invalid_code', request.url))
     }
     
+    console.log('[CLI Auth Debug] Successfully exchanged code for session')
+    
     // Get user info
+    console.log('[CLI Auth Debug] Getting user info...')
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError || !user) {
-      console.error('[CLI Auth] Failed to get user:', userError)
+      console.error('[CLI Auth Debug] Failed to get user:', userError)
       return NextResponse.redirect(new URL('/auth/login?error=no_user', request.url))
     }
+    
+    console.log('[CLI Auth Debug] Got user:', { id: user.id, email: user.email })
     
     // Check if user already has a CLI API key
     const { data: existingKey } = await supabase
@@ -44,17 +58,20 @@ export async function GET(request: Request) {
     if (existingKey) {
       // User already has a key - for security, we don't return it
       // Instead, we'll show a message
+      console.log('[CLI Auth Debug] User already has a Camille CLI key')
       action = 'existing'
       apiKey = '' // Don't expose existing keys
     } else {
       // Create new API key
+      console.log('[CLI Auth Debug] Creating new API key...')
       const result = await createApiKey(user.id, 'Camille CLI')
       
       if (result.error) {
-        console.error('[CLI Auth] Failed to create API key:', result.error)
+        console.error('[CLI Auth Debug] Failed to create API key:', result.error)
         return NextResponse.redirect(new URL('/auth/login?error=api_key_failed', request.url))
       }
       
+      console.log('[CLI Auth Debug] API key created successfully')
       apiKey = result.apiKey!
       action = 'created'
     }
@@ -117,8 +134,9 @@ export async function GET(request: Request) {
           <script>
             // Send API key back to CLI
             (async () => {
+              console.log('[CLI Auth Debug] Attempting to send API key to CLI at http://localhost:${port}/cli-callback');
               try {
-                await fetch('http://localhost:${port}/cli-callback', {
+                const response = await fetch('http://localhost:${port}/cli-callback', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -129,9 +147,10 @@ export async function GET(request: Request) {
                     email: '${user.email || ''}',
                   }),
                 });
+                console.log('[CLI Auth Debug] Response from CLI:', response.status, response.statusText);
               } catch (err) {
                 // CLI might have closed, that's ok
-                console.log('Could not send to CLI:', err);
+                console.error('[CLI Auth Debug] Could not send to CLI:', err);
               }
             })();
           </script>
@@ -140,6 +159,8 @@ export async function GET(request: Request) {
       </html>
     `
     
+    console.log('[CLI Auth Debug] Returning HTML response with action:', action)
+    
     return new NextResponse(html, {
       headers: {
         'Content-Type': 'text/html',
@@ -147,7 +168,7 @@ export async function GET(request: Request) {
     })
     
   } catch (error) {
-    console.error('[CLI Auth] Unexpected error:', error)
+    console.error('[CLI Auth Debug] Unexpected error:', error)
     return NextResponse.redirect(new URL('/auth/login?error=unexpected', request.url))
   }
 }
