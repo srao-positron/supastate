@@ -87,9 +87,10 @@
  ✓ Compiled in 46ms (685 modules)
  ✓ Compiled in 142ms (484 modules)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (108kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
-8fffee70fb084d2cf9ea721e80dec258e8d4fde594
-[Memory Sync] Using Supabase URL: http://127.0.0.1:54321
-[Memory Sync] Unexpected error: SyntaxError: Unexpected token '$', ..."edding": [$(printf 0"... is not valid JSON
+ ✓ Compiled in 107ms (685 modules)
+ ✓ Compiled in 45ms (685 modules)
+ ✓ Compiled in 43ms (685 modules)
+ync] Unexpected error: SyntaxError: Unexpected token '$', ..."edding": [$(printf 0"... is not valid JSON
     at JSON.parse (<anonymous>)
     at parseJSONFromBytes (node:internal/deps/undici/undici:5738:19)
     at successSteps (node:internal/deps/undici/undici:5719:27)
@@ -172,3 +173,9 @@
  ✓ Compiled in 161ms (1588 modules)
  ✓ Compiled in 120ms (1588 modules)
  ✓ Compiled in 119ms (484 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (108kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled in 196ms (1588 modules)
+ ✓ Compiled in 349ms (3543 modules)
+ ✓ Compiled in 126ms (1588 modules)
+ ✓ Compiled in 181ms (3543 modules)
+ ✓ Compiled in 393ms (3543 modules)
