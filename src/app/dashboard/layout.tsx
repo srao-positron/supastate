@@ -15,7 +15,7 @@ export default function DashboardLayout({
       </Suspense>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto ml-2.5">
         <div className="container py-6">
           {children}
         </div>
