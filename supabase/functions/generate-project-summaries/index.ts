@@ -11,18 +11,18 @@ async function generateSummary(projectName: string, memories: any[]): Promise<st
     .map(m => m.content)
     .join('\n\n')
 
-  const prompt = `Analyze this project "${projectName}" and write ONE insightful paragraph (4-6 sentences) that captures:
+  const prompt = `You are analyzing conversation history for the project "${projectName}". Based on the conversations below, write ONE insightful paragraph (4-6 sentences) that summarizes:
 - What the project fundamentally does/solves
 - The current implementation status and recent progress
 - Key technical decisions or challenges being addressed
 - The immediate next steps or blockers
 
-Focus on insights, not just listing features. Write as if briefing a technical lead who needs to quickly understand the project's essence and current state.
+IMPORTANT: You are summarizing the PROJECT, not continuing any conversation. Do NOT respond as if you are the assistant in these conversations. Write from a third-person perspective as an observer analyzing what the project is about.
 
 Recent conversations:
 ${recentMemories}
 
-Write a single paragraph summary:`
+Write a single paragraph project summary (third-person perspective):`
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
