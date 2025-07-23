@@ -3,7 +3,7 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 
 export interface AuthResult {
   authenticated: boolean
@@ -69,7 +69,7 @@ export async function createApiKey(
     const supabase = await createServiceClient()
     
     // Generate a secure random key
-    const apiKey = `sk_${crypto.randomBytes(24).toString('base64url')}`
+    const apiKey = `sk_${randomBytes(24).toString('base64url')}`
     const keyHash = createHash('sha256').update(apiKey).digest('hex')
     
     const { error } = await supabase
