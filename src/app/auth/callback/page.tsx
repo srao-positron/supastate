@@ -10,8 +10,6 @@ function AuthCallbackContent() {
   
   useEffect(() => {
     const handleCallback = async () => {
-      const supabase = createClient();
-      
       // Check if this is a CLI auth
       const isCliAuth = searchParams.get('cli') === 'true';
       const cliPort = searchParams.get('port') || '8899';
@@ -23,31 +21,45 @@ function AuthCallbackContent() {
         search: window.location.search
       });
       
-      // Handle the auth callback
-      const { error } = await supabase.auth.getSession();
+      // Parse hash tokens if present
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
       
-      if (!error) {
+      if (accessToken) {
+        // We have tokens from implicit flow
+        console.log('[Auth Callback Page] Found implicit flow tokens');
+        
         if (isCliAuth) {
-          // For CLI auth, redirect to server-side handler
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            // Create a temporary auth code
-            const tempCode = btoa(JSON.stringify({
-              access_token: session.access_token,
-              refresh_token: session.refresh_token,
-              expires_at: session.expires_at
-            }));
-            
-            // Redirect to server handler with code
-            window.location.href = `/auth/cli/process?code=${encodeURIComponent(tempCode)}&port=${cliPort}`;
-          }
+          // For CLI auth, redirect to server-side handler with tokens
+          const tempCode = btoa(JSON.stringify({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            expires_at: Date.now() + 3600 * 1000 // 1 hour from now
+          }));
+          
+          console.log('[Auth Callback Page] Redirecting to CLI processor');
+          window.location.href = `/auth/cli/process?code=${encodeURIComponent(tempCode)}&port=${cliPort}`;
         } else {
-          // Regular auth - redirect to dashboard
+          // Regular auth - set up Supabase session and redirect
+          const supabase = createClient();
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken!
+          });
           router.push('/dashboard');
         }
       } else {
-        console.error('[Auth Callback Page] Error:', error);
-        router.push('/auth/login?error=auth_failed');
+        // No hash tokens, check for code parameter (server-side flow)
+        const code = searchParams.get('code');
+        if (code) {
+          // Server will handle this
+          console.log('[Auth Callback Page] Code flow detected, server will handle');
+        } else {
+          // No auth data
+          console.error('[Auth Callback Page] No auth data found');
+          router.push('/auth/login?error=no_auth_data');
+        }
       }
     };
     
