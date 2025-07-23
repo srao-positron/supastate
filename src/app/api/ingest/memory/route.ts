@@ -2,7 +2,7 @@
  * Memory ingestion API - accepts raw memory chunks for server-side processing
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { verifyApiKey } from '@/lib/auth/api-key'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     })
     
     // Insert chunks into queue
-    const supabase = await createClient()
+    const supabase = await createServiceClient()
     const queueItems = chunks.map(chunk => ({
       workspace_id: workspace,
       session_id: sessionId,

@@ -2,7 +2,7 @@
  * Code ingestion API - accepts raw code files for server-side processing
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { verifyApiKey } from '@/lib/auth/api-key'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -66,15 +66,15 @@ export async function POST(request: Request) {
     })
     
     // Insert files into queue
-    const supabase = await createClient()
+    const supabase = await createServiceClient()
     const queueItems = files.map(file => ({
       workspace_id: workspace,
-      project_path: projectPath,
       file_path: file.path,
       content: file.content,
       language: file.language || detectLanguage(file.path),
       metadata: {
         ...file.metadata,
+        projectPath, // Store project path in metadata
         lastModified: file.lastModified,
         ingested_at: new Date().toISOString(),
       },
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       const { data, error } = await supabase
         .from('code_queue')
         .upsert(batch, {
-          onConflict: 'workspace_id,project_path,file_path',
+          onConflict: 'workspace_id,file_path',
           ignoreDuplicates: false,
         })
         .select('id, file_path, status')

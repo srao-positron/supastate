@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     const query = searchParams.get('q')
     const limit = parseInt(searchParams.get('limit') || '20')
     const includeProcessing = searchParams.get('includeProcessing') === 'true'
+    const project = searchParams.get('project') // Optional project filter
     
     if (!query) {
       return NextResponse.json({ error: 'Query parameter required' }, { status: 400 })
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       ? `team:${authResult.teamId}`
       : `user:${authResult.userId}`
     
-    console.log('[Memory Search] Searching', { workspace, query, limit })
+    console.log('[Memory Search] Searching', { workspace, query, limit, project })
     
     // Generate embedding for query
     const openai = new OpenAI({
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
         workspace_filter: workspace,
         match_threshold: 0.7,
         match_count: limit,
+        project_filter: project || null,
       })
     
     if (error) {
@@ -78,12 +80,13 @@ export async function GET(request: Request) {
     }
     
     // Format results
-    const results = memories?.map(m => ({
+    const results = memories?.map((m: any) => ({
       chunkId: m.chunk_id,
       content: m.content,
       similarity: m.similarity,
       metadata: m.metadata,
       sessionId: m.session_id,
+      projectName: m.project_name,
     })) || []
     
     return NextResponse.json({

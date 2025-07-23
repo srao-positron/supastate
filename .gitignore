@@ -50,3 +50,5 @@ supabase-config
 
 # Security - contains credentials
 docs/vercel-env-vars.txt
+dev-server.log
+dev.log
