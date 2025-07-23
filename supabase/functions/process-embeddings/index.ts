@@ -6,6 +6,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://deno.land/x/openai@v4.20.1/mod.ts'
+import { EdgeLogger } from '../_shared/logger.ts'
+import { getConfig } from '../_shared/config.ts'
 
 const BATCH_SIZE = parseInt(Deno.env.get('BATCH_SIZE') || '100') // Can process more with background tasks
 const PARALLEL_WORKERS = parseInt(Deno.env.get('PARALLEL_WORKERS') || '10')
@@ -30,17 +32,25 @@ const stats: ProcessingStats = {
 }
 
 // Background processing function
-async function processEmbeddings() {
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  )
+async function processEmbeddings(requestId: string) {
+  const logger = new EdgeLogger('process-embeddings', requestId)
   
-  const openai = new OpenAI({
-    apiKey: Deno.env.get('OPENAI_API_KEY') ?? '',
-  })
-  
-  console.log('[Process Embeddings] Starting background processing')
+  try {
+    const config = getConfig()
+    
+    const supabase = createClient(
+      config.supabaseUrl,
+      config.supabaseServiceRoleKey
+    )
+    
+    const openai = new OpenAI({
+      apiKey: config.openaiApiKey ?? '',
+    })
+    
+    logger.info('Starting background processing', { 
+      batchSize: BATCH_SIZE,
+      parallelWorkers: PARALLEL_WORKERS 
+    })
   
   try {
     // Process memory chunks
@@ -52,11 +62,12 @@ async function processEmbeddings() {
       .limit(BATCH_SIZE)
     
     if (memoryError) {
+      logger.error('Failed to get memory chunks', memoryError)
       throw new Error(`Failed to get memory chunks: ${memoryError.message}`)
     }
     
     if (memoryChunks && memoryChunks.length > 0) {
-      console.log(`[Process Embeddings] Processing ${memoryChunks.length} memory chunks`)
+      logger.info('Processing memory chunks', { count: memoryChunks.length })
       
       // Mark chunks as processing
       const chunkIds = memoryChunks.map(c => c.id)
@@ -113,7 +124,7 @@ async function processEmbeddings() {
           
           return { success: true, id: chunk.id }
         } catch (error) {
-          console.error(`[Process Embeddings] Error processing chunk ${chunk.id}:`, error)
+          logger.error('Error processing chunk', error, { chunkId: chunk.id })
           
           // Mark as failed
           await supabase
@@ -130,7 +141,11 @@ async function processEmbeddings() {
       })
       
       const successCount = results.filter(r => r.success).length
-      console.log(`[Process Embeddings] Completed ${successCount}/${results.length} memory chunks`)
+      logger.info('Memory processing completed', {
+        successful: successCount,
+        total: results.length,
+        failed: results.length - successCount
+      })
     }
     
     // Process code files
@@ -142,18 +157,19 @@ async function processEmbeddings() {
       .limit(Math.floor(BATCH_SIZE / 2)) // Code files are larger
     
     if (codeError) {
+      logger.error('Failed to get code files', codeError)
       throw new Error(`Failed to get code files: ${codeError.message}`)
     }
     
     if (codeFiles && codeFiles.length > 0) {
-      console.log(`[Process Embeddings] Processing ${codeFiles.length} code files`)
+      logger.info('Processing code files', { count: codeFiles.length })
       
       // Similar processing for code files...
       // (Implementation would be similar to memory chunks)
     }
     
   } catch (error) {
-    console.error('[Process Embeddings] Background processing error:', error)
+    logger.error('Background processing error', error)
   }
 }
 
@@ -210,7 +226,7 @@ async function waitForRateLimit(contentLength: number) {
   if (stats.tokensThisMinute + estimatedTokens > MAX_TOKENS_PER_MINUTE) {
     const waitTime = 60000 - (now - stats.lastMinuteReset)
     if (waitTime > 0) {
-      console.log(`[Process Embeddings] Token limit reached, waiting ${waitTime}ms`)
+      // Only log when actually waiting
       await new Promise(resolve => setTimeout(resolve, waitTime))
     }
   }
@@ -222,15 +238,24 @@ function updateStats(contentLength: number) {
 }
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID()
+  const logger = new EdgeLogger('process-embeddings', requestId)
+  
   try {
+    logger.info('Received processing request', {
+      method: req.method,
+      url: req.url,
+    })
+    
     // Start background processing
-    processEmbeddings() // Don't await - let it run in background
+    processEmbeddings(requestId) // Don't await - let it run in background
     
     // Return immediately
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Processing started in background',
+        requestId,
         timestamp: new Date().toISOString()
       }),
       { 
@@ -239,9 +264,13 @@ serve(async (req) => {
       }
     )
   } catch (error) {
-    console.error('[Process Embeddings] Error:', error)
+    logger.error('Request handler error', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: 'Internal server error',
+        requestId,
+        message: config.environment === 'development' ? error.message : undefined
+      }),
       { 
         headers: { 'Content-Type': 'application/json' },
         status: 500

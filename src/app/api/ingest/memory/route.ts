@@ -4,8 +4,10 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { verifyApiKey } from '@/lib/auth/api-key'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { z } from 'zod'
+import Logger from '@/lib/logging/logger'
+import { getRequestId } from '@/lib/logging/request-id'
 
 // Validation schema
 const memoryChunkSchema = z.object({
@@ -27,8 +29,14 @@ const requestSchema = z.object({
   chunks: z.array(memoryChunkSchema),
 })
 
-export async function POST(request: Request) {
-  console.log('[Memory Ingest] Starting ingestion request')
+export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request)
+  const logger = new Logger({ 
+    operation: 'memory_ingest',
+    requestId,
+  })
+  
+  logger.info('Starting ingestion request')
   
   try {
     // Verify API key
@@ -41,7 +49,7 @@ export async function POST(request: Request) {
     const authResult = await verifyApiKey(apiKey)
     
     if (!authResult.authenticated) {
-      console.log('[Memory Ingest] Authentication failed')
+      logger.warn('Authentication failed - invalid API key')
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
     
@@ -50,7 +58,13 @@ export async function POST(request: Request) {
       ? `team:${authResult.teamId}`
       : `user:${authResult.userId}`
     
-    console.log('[Memory Ingest] Authenticated', { workspace })
+    const authLogger = logger.child({
+      userId: authResult.userId,
+      teamId: authResult.teamId,
+      workspace,
+    })
+    
+    authLogger.info('Authentication successful')
     
     // Parse and validate request
     const body = await request.json()
@@ -65,8 +79,7 @@ export async function POST(request: Request) {
     
     const { sessionId, projectPath, chunks } = validationResult.data
     
-    console.log('[Memory Ingest] Processing request', {
-      workspace,
+    authLogger.info('Processing request', {
       sessionId,
       projectPath,
       chunkCount: chunks.length,
@@ -102,8 +115,7 @@ export async function POST(request: Request) {
         .select('id, chunk_id, status')
       
       if (error) {
-        console.error('[Memory Ingest] Batch insert error', { 
-          error,
+        authLogger.error('Batch insert failed', error, { 
           batchIndex: i / batchSize,
         })
         // Continue with other batches even if one fails
@@ -133,8 +145,7 @@ export async function POST(request: Request) {
       .filter(r => !r.success)
       .reduce((sum, r) => sum + (r.chunks?.length || 0), 0)
     
-    console.log('[Memory Ingest] Ingestion completed', {
-      workspace,
+    authLogger.info('Ingestion completed', {
       totalQueued,
       failed,
     })
@@ -150,9 +161,12 @@ export async function POST(request: Request) {
     })
     
   } catch (error) {
-    console.error('[Memory Ingest] Unexpected error', { error })
+    logger.error('Unexpected error during ingestion', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        requestId,
+      },
       { status: 500 }
     )
   }

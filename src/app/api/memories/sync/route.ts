@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { createHash } from 'crypto'
+import Logger from '@/lib/logging/logger'
+import { getRequestId, sanitizeForLogging } from '@/lib/logging/request-id'
 
 // Enhanced schema with rich metadata support
 const MemorySyncSchema = z.object({
@@ -34,7 +36,13 @@ const MemorySyncSchema = z.object({
  * Supports both API key and session-based authentication
  */
 export async function POST(request: NextRequest) {
-  console.log('[Memory Sync] Starting sync request')
+  const requestId = getRequestId(request)
+  const logger = new Logger({ 
+    operation: 'memory_sync',
+    requestId,
+  })
+  
+  logger.info('Starting sync request')
   
   try {
     // Check authentication method
@@ -47,15 +55,17 @@ export async function POST(request: NextRequest) {
     
     // Handle API key authentication
     if (apiKey) {
-      console.log('[Memory Sync] Authenticating with API key')
+      logger.debug('Authenticating with API key')
       
       // Use service client to verify API key
       const serviceClient = await createServiceClient()
       
       // Hash the API key for comparison
       const keyHash = createHash('sha256').update(apiKey).digest('hex')
-      console.log('[Memory Sync] API key hash:', keyHash)
-      console.log('[Memory Sync] Using Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+      logger.debug('API key validation', { 
+        keyHashPrefix: keyHash.substring(0, 8) + '...',
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL 
+      })
       
       const { data: apiKeyData, error: apiKeyError } = await serviceClient
         .from('api_keys')
@@ -65,7 +75,7 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (apiKeyError || !apiKeyData) {
-        console.error('[Memory Sync] API key validation error:', apiKeyError)
+        logger.warn('API key validation failed', { error: apiKeyError })
         return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
       }
       
@@ -87,7 +97,7 @@ export async function POST(request: NextRequest) {
     } 
     // Handle session authentication (from web dashboard)
     else if (authorization?.startsWith('Bearer ')) {
-      console.log('[Memory Sync] Authenticating with session')
+      logger.debug('Authenticating with session')
       
       // Use regular client for session auth
       supabase = await createClient()
@@ -95,20 +105,28 @@ export async function POST(request: NextRequest) {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
       if (userError || !user) {
-        console.error('[Memory Sync] Session validation error:', userError)
+        logger.warn('Session validation failed', { error: userError })
         return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
       }
       
       authenticatedUserId = user.id
     } 
     else {
-      console.error('[Memory Sync] No authentication provided')
+      logger.warn('No authentication provided')
       return NextResponse.json({ error: 'Missing authentication' }, { status: 401 })
     }
     
     // Parse and validate request body
     const body = await request.json()
-    console.log('[Memory Sync] Request body:', { 
+    
+    // Update logger with authenticated context
+    const authLogger = logger.child({
+      userId: authenticatedUserId,
+      teamId: authenticatedTeamId,
+      workspace: authenticatedTeamId ? `team:${authenticatedTeamId}` : `user:${authenticatedUserId}`,
+    })
+    
+    authLogger.info('Processing sync request', { 
       teamId: body.teamId, 
       projectName: body.projectName, 
       chunkCount: body.chunks?.length || 0 
@@ -122,24 +140,24 @@ export async function POST(request: NextRequest) {
       const { data: memberData } = await supabase
         .from('team_members')
         .select('team_id')
-        .eq('user_id', authenticatedUserId)
+        .eq('user_id', authenticatedUserId!)
         .eq('team_id', teamId)
         .single()
       
       if (!memberData) {
-        console.error('[Memory Sync] User not member of specified team')
+        authLogger.warn('Access denied - user not member of team', { requestedTeamId: teamId })
         return NextResponse.json({ error: 'Access denied to team' }, { status: 403 })
       }
       
       authenticatedTeamId = teamId
     }
     
-    console.log(`[Memory Sync] Upserting ${chunks.length} chunks`)
+    authLogger.info('Starting chunk upsert', { totalChunks: chunks.length })
     
     // Prepare memory data
     const memoryData = chunks.map(chunk => ({
-      team_id: authenticatedTeamId,
-      user_id: authenticatedTeamId ? null : authenticatedUserId,
+      team_id: authenticatedTeamId || undefined,
+      user_id: authenticatedTeamId ? undefined : authenticatedUserId || undefined,
       project_name: projectName,
       chunk_id: chunk.chunkId,
       content: chunk.content,
@@ -161,7 +179,11 @@ export async function POST(request: NextRequest) {
     
     for (let i = 0; i < memoryData.length; i += batchSize) {
       const batch = memoryData.slice(i, i + batchSize)
-      console.log(`[Memory Sync] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(memoryData.length / batchSize)}`)
+      authLogger.debug('Processing batch', {
+        batchNumber: Math.floor(i / batchSize) + 1,
+        totalBatches: Math.ceil(memoryData.length / batchSize),
+        batchSize: batch.length
+      })
       
       const { data, error } = await supabase
         .from('memories')
@@ -172,10 +194,10 @@ export async function POST(request: NextRequest) {
         .select('id')
       
       if (error) {
-        console.error('[Memory Sync] Batch upsert error:', error)
+        authLogger.error('Batch upsert failed', error, { batchIndex: i / batchSize })
         results.push({ error })
       } else {
-        console.log(`[Memory Sync] Successfully upserted ${data?.length || 0} records`)
+        authLogger.debug('Batch upsert successful', { recordsUpserted: data?.length || batch.length })
         results.push({ success: true, count: data?.length || batch.length })
       }
     }
@@ -184,25 +206,25 @@ export async function POST(request: NextRequest) {
     const errors = results.filter(r => r.error).map(r => r.error)
     const successCount = results.filter(r => r.success).reduce((sum, r) => sum + r.count, 0)
     
-    console.log(`[Memory Sync] Sync completed. Success: ${successCount}, Errors: ${errors.length}`)
-    
-    if (errors.length > 0 && successCount === 0) {
-      return NextResponse.json({ 
-        error: 'Failed to sync all chunks', 
-        details: errors 
-      }, { status: 500 })
-    }
-    
-    // Log sync status
-    console.log('[Memory Sync] Sync status:', {
+    const syncStatus = {
       workspace: authenticatedTeamId ? `team:${authenticatedTeamId}` : `user:${authenticatedUserId}`,
       project_name: projectName,
       sync_type: 'memory',
       status: errors.length > 0 ? 'partial' : 'completed',
       chunks_synced: successCount,
       chunks_failed: errors.length,
-      completed_at: new Date().toISOString(),
-    })
+      duration_ms: Date.now() - new Date().getTime(),
+    }
+    
+    authLogger.info('Sync completed', syncStatus)
+    
+    if (errors.length > 0 && successCount === 0) {
+      return NextResponse.json({ 
+        error: 'Failed to sync all chunks', 
+        requestId,
+        details: process.env.NODE_ENV === 'development' ? errors : undefined 
+      }, { status: 500 })
+    }
     
     return NextResponse.json({ 
       success: true, 
@@ -212,17 +234,19 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Memory Sync] Validation error:', error.errors)
+      logger.warn('Request validation failed', { errors: error.errors })
       return NextResponse.json({ 
         error: 'Invalid request data',
+        requestId,
         details: error.errors
       }, { status: 400 })
     }
     
-    console.error('[Memory Sync] Unexpected error:', error)
+    logger.error('Unexpected error during sync', error)
     return NextResponse.json({ 
       error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      requestId,
+      message: process.env.NODE_ENV === 'development' && error instanceof Error ? error.message : undefined
     }, { status: 500 })
   }
 }
