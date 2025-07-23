@@ -7,6 +7,8 @@ import { verifyApiKey } from '@/lib/auth/api-key'
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
