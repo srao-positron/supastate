@@ -18,6 +18,7 @@ import { MemoryActivityCharts } from '@/components/memories/memory-activity-char
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { MemoryFilters, type MemoryFilters as MemoryFiltersType } from '@/components/memories/memory-filters'
 
 export default function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[]>([])
@@ -33,6 +34,8 @@ export default function MemoriesPage() {
     totalMemories: 0,
     projectCounts: {} as Record<string, number>,
   })
+  const [projects, setProjects] = useState<string[]>([])
+  const [activeFilters, setActiveFilters] = useState<MemoryFiltersType>({})
   const { toast } = useToast()
 
   const pageSize = 20
@@ -44,6 +47,10 @@ export default function MemoriesPage() {
         // Load stats
         const memoryStats = await memoriesAPI.getMemoryStats()
         setStats(memoryStats)
+        
+        // Load projects list
+        const projectList = await memoriesAPI.getProjects()
+        setProjects(projectList)
         
         // Load initial memories
         await handleSearch('', undefined)
@@ -73,22 +80,49 @@ export default function MemoriesPage() {
     }
   }
 
-  // Search handler
-  const handleSearch = useCallback(async (query: string, projectFilter?: string[]) => {
+  // Search handler with filters
+  const handleSearch = useCallback(async (query: string, projectFilter?: string[], filters?: MemoryFiltersType) => {
     setIsLoading(true)
     setError(null)
     setCurrentPage(1)
 
     try {
-      const response = await memoriesAPI.searchMemories({
+      // Apply filters to the query
+      let filteredMemories = await memoriesAPI.searchMemories({
         query,
-        projectFilter,
-        limit: pageSize,
+        projectFilter: filters?.selectedProjects || projectFilter,
+        limit: pageSize * 10, // Get more results for client-side filtering
         offset: 0,
       })
 
-      setMemories(response.results)
-      setSearchResponse(response)
+      // Apply date and time filters client-side
+      if (filters?.dateRange?.from || filters?.dateRange?.to || filters?.timeRange?.startHour !== undefined || filters?.timeRange?.endHour !== undefined) {
+        filteredMemories.results = filteredMemories.results.filter(memory => {
+          const memoryDate = new Date(memory.created_at)
+          const memoryHour = memoryDate.getHours()
+
+          // Date range filter
+          if (filters?.dateRange?.from && memoryDate < filters.dateRange.from) return false
+          if (filters?.dateRange?.to && memoryDate > filters.dateRange.to) return false
+
+          // Time range filter
+          if (filters?.timeRange?.startHour !== undefined && memoryHour < filters.timeRange.startHour) return false
+          if (filters?.timeRange?.endHour !== undefined && memoryHour > filters.timeRange.endHour) return false
+
+          return true
+        })
+        filteredMemories.total = filteredMemories.results.length
+      }
+
+      // Paginate results
+      const paginatedResults = filteredMemories.results.slice(0, pageSize)
+      
+      setMemories(paginatedResults)
+      setSearchResponse({
+        ...filteredMemories,
+        results: paginatedResults,
+        hasMore: filteredMemories.results.length > pageSize
+      })
     } catch (err) {
       setError('Failed to search memories. Please try again.')
       toast({
@@ -222,8 +256,18 @@ export default function MemoriesPage() {
         {/* Detailed Memories Tab */}
         <TabsContent value="details" className="space-y-6">
           <MemorySearch
-            onSearch={handleSearch}
+            onSearch={(query, projectFilter) => handleSearch(query, projectFilter, activeFilters)}
             isSearching={isLoading}
+          />
+
+          {/* Filters */}
+          <MemoryFilters
+            projects={projects}
+            onFiltersChange={(filters) => {
+              setActiveFilters(filters)
+              handleSearch('', undefined, filters)
+            }}
+            isLoading={isLoading}
           />
 
           {/* Quick Actions and View Toggle */}

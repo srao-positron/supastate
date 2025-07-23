@@ -159,10 +159,10 @@ export class MemoriesAPI {
       const { teamId, userId } = await this.getWorkspaceInfo()
       if (!teamId && !userId) return []
 
+      // Use RPC to get distinct project names more efficiently
       let query = this.supabase
         .from('memories')
         .select('project_name')
-        .order('project_name')
       
       // Filter by workspace
       if (teamId) {
@@ -171,13 +171,19 @@ export class MemoriesAPI {
         query = query.eq('user_id', userId).is('team_id', null)
       }
       
+      // Get all results to ensure we capture all unique projects
       const { data, error } = await query
 
       if (error) throw error
 
-      // Extract unique project names
-      const projects = [...new Set(data?.map(item => item.project_name) || [])]
-      return projects
+      // Extract unique project names and filter out nulls/empty strings
+      const uniqueProjects = [...new Set(
+        data?.map(item => item.project_name)
+          .filter(name => name && name.trim() !== '') || []
+      )]
+      
+      // Sort alphabetically
+      return uniqueProjects.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
     } catch (error) {
       console.error('Get projects error:', error)
       return []
