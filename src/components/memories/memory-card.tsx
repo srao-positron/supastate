@@ -109,11 +109,12 @@ export function MemoryCard({
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
-                  code({ node, inline, className, children, ...props }) {
+                  code({ className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '')
                     const language = match ? match[1] : 'plaintext'
+                    const isInline = !className || className.indexOf('language-') === -1
                     
-                    if (!inline) {
+                    if (!isInline && match) {
                       return (
                         <div className="relative my-4">
                           <div className="absolute top-2 right-2 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded z-10">
@@ -128,7 +129,6 @@ export function MemoryCard({
                               fontSize: '0.875rem',
                             }}
                             showLineNumbers
-                            {...props}
                           >
                             {String(children).replace(/\n$/, '')}
                           </SyntaxHighlighter>
@@ -143,34 +143,34 @@ export function MemoryCard({
                     )
                   },
                   // Custom styling for other elements
-                  p: ({ children }) => <p className="mb-4 leading-relaxed">{children}</p>,
-                  ul: ({ children }) => <ul className="list-disc pl-6 mb-4">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal pl-6 mb-4">{children}</ol>,
-                  li: ({ children }) => <li className="mb-1">{children}</li>,
-                  blockquote: ({ children }) => (
+                  p: ({ children }: any) => <p className="mb-4 leading-relaxed">{children}</p>,
+                  ul: ({ children }: any) => <ul className="list-disc pl-6 mb-4">{children}</ul>,
+                  ol: ({ children }: any) => <ol className="list-decimal pl-6 mb-4">{children}</ol>,
+                  li: ({ children }: any) => <li className="mb-1">{children}</li>,
+                  blockquote: ({ children }: any) => (
                     <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic my-4">
                       {children}
                     </blockquote>
                   ),
-                  h1: ({ children }) => <h1 className="text-2xl font-bold mb-4 mt-6">{children}</h1>,
-                  h2: ({ children }) => <h2 className="text-xl font-semibold mb-3 mt-5">{children}</h2>,
-                  h3: ({ children }) => <h3 className="text-lg font-semibold mb-2 mt-4">{children}</h3>,
-                  h4: ({ children }) => <h4 className="text-base font-semibold mb-2 mt-3">{children}</h4>,
+                  h1: ({ children }: any) => <h1 className="text-2xl font-bold mb-4 mt-6">{children}</h1>,
+                  h2: ({ children }: any) => <h2 className="text-xl font-semibold mb-3 mt-5">{children}</h2>,
+                  h3: ({ children }: any) => <h3 className="text-lg font-semibold mb-2 mt-4">{children}</h3>,
+                  h4: ({ children }: any) => <h4 className="text-base font-semibold mb-2 mt-3">{children}</h4>,
                   hr: () => <hr className="my-6 border-muted-foreground/30" />,
-                  a: ({ href, children }) => (
+                  a: ({ href, children }: any) => (
                     <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
                       {children}
                     </a>
                   ),
-                  table: ({ children }) => (
+                  table: ({ children }: any) => (
                     <div className="overflow-x-auto my-4">
                       <table className="min-w-full divide-y divide-border">{children}</table>
                     </div>
                   ),
-                  th: ({ children }) => (
+                  th: ({ children }: any) => (
                     <th className="px-3 py-2 text-left text-sm font-semibold">{children}</th>
                   ),
-                  td: ({ children }) => (
+                  td: ({ children }: any) => (
                     <td className="px-3 py-2 text-sm">{children}</td>
                   ),
                 }}
