@@ -151,17 +151,17 @@ export function MemoryTags({ memory }: MemoryTagsProps) {
   const tags: string[] = []
   
   // Extract tags from metadata
-  if (memory.metadata?.tools) {
+  if (memory.metadata?.tools && Array.isArray(memory.metadata.tools)) {
     tags.push(...memory.metadata.tools)
   }
   
-  if (memory.metadata?.topics) {
+  if (memory.metadata?.topics && Array.isArray(memory.metadata.topics)) {
     tags.push(...memory.metadata.topics)
   }
   
-  // Add message type if available
-  if (memory.message_type) {
-    tags.push(memory.message_type)
+  // Add message type if available in metadata
+  if (memory.metadata?.messageType) {
+    tags.push(memory.metadata.messageType)
   }
   
   if (tags.length === 0) return null
@@ -228,7 +228,7 @@ export function MemoryInsights({ memories }: MemoryInsightsProps) {
   const avgWordsPerMemory = memories.length > 0 ? Math.round(totalWords / memories.length) : 0
   
   const messageTypes = memories.reduce((acc, m) => {
-    const type = m.message_type || 'unknown'
+    const type = m.metadata?.messageType || 'unknown'
     acc[type] = (acc[type] || 0) + 1
     return acc
   }, {} as Record<string, number>)
