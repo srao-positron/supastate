@@ -35,14 +35,22 @@ export class MemoriesAPI {
     if (!user) return { teamId: null, userId: null }
 
     // Check if user is part of a team
-    const { data: teamMember } = await this.supabase
+    const { data: teamMembers, error } = await this.supabase
       .from('team_members')
       .select('team_id')
       .eq('user_id', user.id)
-      .single()
+      .limit(1)
+
+    // If there's an error or no team membership, just use personal workspace
+    if (error || !teamMembers || teamMembers.length === 0) {
+      return {
+        teamId: null,
+        userId: user.id
+      }
+    }
 
     return {
-      teamId: teamMember?.team_id || null,
+      teamId: teamMembers[0]?.team_id || null,
       userId: user.id
     }
   }

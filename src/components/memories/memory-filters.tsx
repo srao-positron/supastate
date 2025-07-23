@@ -66,7 +66,7 @@ export function MemoryFilters({ projects, onFiltersChange, isLoading }: MemoryFi
   const handleTimeChange = (type: 'startHour' | 'endHour', hour?: string) => {
     const newTimeRange = { 
       ...timeRange, 
-      [type]: hour ? parseInt(hour) : undefined 
+      [type]: hour === 'any' ? undefined : hour ? parseInt(hour) : undefined 
     }
     setTimeRange(newTimeRange)
     applyFilters({ timeRange: newTimeRange })
@@ -213,14 +213,14 @@ export function MemoryFilters({ projects, onFiltersChange, isLoading }: MemoryFi
             </Label>
             <div className="flex gap-2 items-center">
               <Select
-                value={timeRange.startHour?.toString()}
+                value={timeRange.startHour?.toString() || 'any'}
                 onValueChange={(hour) => handleTimeChange('startHour', hour)}
               >
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Start hour" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any time</SelectItem>
+                  <SelectItem value="any">Any time</SelectItem>
                   {hours.map((hour) => (
                     <SelectItem key={hour} value={hour.toString()}>
                       {hour.toString().padStart(2, '0')}:00
@@ -232,14 +232,14 @@ export function MemoryFilters({ projects, onFiltersChange, isLoading }: MemoryFi
               <span className="text-muted-foreground">to</span>
 
               <Select
-                value={timeRange.endHour?.toString()}
+                value={timeRange.endHour?.toString() || 'any'}
                 onValueChange={(hour) => handleTimeChange('endHour', hour)}
               >
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="End hour" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any time</SelectItem>
+                  <SelectItem value="any">Any time</SelectItem>
                   {hours.map((hour) => (
                     <SelectItem key={hour} value={hour.toString()}>
                       {hour.toString().padStart(2, '0')}:00
