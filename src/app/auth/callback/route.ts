@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createCliApiKey } from '../cli/route'
+import { createCliApiKey } from '@/lib/api-keys'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
