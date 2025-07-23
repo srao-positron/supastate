@@ -6,51 +6,22 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://deno.land/x/openai@v4.20.1/mod.ts'
-import { EdgeLogger } from '../_shared/logger.ts'
-import { getConfig } from '../_shared/config.ts'
 
-const BATCH_SIZE = parseInt(Deno.env.get('BATCH_SIZE') || '100') // Can process more with background tasks
-const PARALLEL_WORKERS = parseInt(Deno.env.get('PARALLEL_WORKERS') || '10')
-const RATE_LIMIT_DELAY = parseInt(Deno.env.get('RATE_LIMIT_DELAY') || '1000') // ms
-
-// OpenAI rate limits for embeddings (ada-002)
-const MAX_REQUESTS_PER_SECOND = 40
-const MAX_TOKENS_PER_MINUTE = 900000 // Leave buffer
-
-interface ProcessingStats {
-  requestsThisSecond: number
-  tokensThisMinute: number
-  lastSecondReset: number
-  lastMinuteReset: number
-}
-
-const stats: ProcessingStats = {
-  requestsThisSecond: 0,
-  tokensThisMinute: 0,
-  lastSecondReset: Date.now(),
-  lastMinuteReset: Date.now(),
-}
+const BATCH_SIZE = 100
+const PARALLEL_WORKERS = 10
 
 // Background processing function
-async function processEmbeddings(requestId: string) {
-  const logger = new EdgeLogger('process-embeddings', requestId)
+async function processEmbeddings() {
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
   
-  try {
-    const config = getConfig()
-    
-    const supabase = createClient(
-      config.supabaseUrl,
-      config.supabaseServiceRoleKey
-    )
-    
-    const openai = new OpenAI({
-      apiKey: config.openaiApiKey ?? '',
-    })
-    
-    logger.info('Starting background processing', { 
-      batchSize: BATCH_SIZE,
-      parallelWorkers: PARALLEL_WORKERS 
-    })
+  const openai = new OpenAI({
+    apiKey: Deno.env.get('OPENAI_API_KEY') ?? '',
+  })
+  
+  console.log('[Process Embeddings] Starting background processing')
   
   try {
     // Process memory chunks
@@ -62,12 +33,11 @@ async function processEmbeddings(requestId: string) {
       .limit(BATCH_SIZE)
     
     if (memoryError) {
-      logger.error('Failed to get memory chunks', memoryError)
       throw new Error(`Failed to get memory chunks: ${memoryError.message}`)
     }
     
     if (memoryChunks && memoryChunks.length > 0) {
-      logger.info('Processing memory chunks', { count: memoryChunks.length })
+      console.log(`[Process Embeddings] Processing ${memoryChunks.length} memory chunks`)
       
       // Mark chunks as processing
       const chunkIds = memoryChunks.map(c => c.id)
@@ -76,18 +46,14 @@ async function processEmbeddings(requestId: string) {
         .update({ status: 'processing' })
         .in('id', chunkIds)
       
-      // Process in parallel with rate limiting
-      const results = await processInParallel(memoryChunks, async (chunk) => {
+      // Process chunks
+      const promises = memoryChunks.map(async (chunk) => {
         try {
-          await waitForRateLimit(chunk.content.length)
-          
           const embedding = await openai.embeddings.create({
             model: 'text-embedding-3-small',
             input: chunk.content,
             dimensions: 1536,
           })
-          
-          updateStats(chunk.content.length)
           
           // Insert into memories table
           const { error: insertError } = await supabase
@@ -124,7 +90,7 @@ async function processEmbeddings(requestId: string) {
           
           return { success: true, id: chunk.id }
         } catch (error) {
-          logger.error('Error processing chunk', error, { chunkId: chunk.id })
+          console.error(`[Process Embeddings] Error processing chunk ${chunk.id}:`, error)
           
           // Mark as failed
           await supabase
@@ -140,122 +106,26 @@ async function processEmbeddings(requestId: string) {
         }
       })
       
+      const results = await Promise.all(promises)
       const successCount = results.filter(r => r.success).length
-      logger.info('Memory processing completed', {
-        successful: successCount,
-        total: results.length,
-        failed: results.length - successCount
-      })
-    }
-    
-    // Process code files
-    const { data: codeFiles, error: codeError } = await supabase
-      .from('code_queue')
-      .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(Math.floor(BATCH_SIZE / 2)) // Code files are larger
-    
-    if (codeError) {
-      logger.error('Failed to get code files', codeError)
-      throw new Error(`Failed to get code files: ${codeError.message}`)
-    }
-    
-    if (codeFiles && codeFiles.length > 0) {
-      logger.info('Processing code files', { count: codeFiles.length })
-      
-      // Similar processing for code files...
-      // (Implementation would be similar to memory chunks)
+      console.log(`[Process Embeddings] Completed ${successCount}/${results.length} memory chunks`)
     }
     
   } catch (error) {
-    logger.error('Background processing error', error)
+    console.error('[Process Embeddings] Background processing error:', error)
   }
-}
-
-// Helper function to process items in parallel with concurrency limit
-async function processInParallel<T, R>(
-  items: T[],
-  processor: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = []
-  const executing: Promise<void>[] = []
-  
-  for (const item of items) {
-    const promise = processor(item).then(result => {
-      results.push(result)
-    })
-    
-    executing.push(promise)
-    
-    if (executing.length >= PARALLEL_WORKERS) {
-      await Promise.race(executing)
-      executing.splice(executing.findIndex(p => p), 1)
-    }
-  }
-  
-  await Promise.all(executing)
-  return results
-}
-
-// Rate limiting helpers
-async function waitForRateLimit(contentLength: number) {
-  const now = Date.now()
-  
-  // Reset counters if needed
-  if (now - stats.lastSecondReset >= 1000) {
-    stats.requestsThisSecond = 0
-    stats.lastSecondReset = now
-  }
-  if (now - stats.lastMinuteReset >= 60000) {
-    stats.tokensThisMinute = 0
-    stats.lastMinuteReset = now
-  }
-  
-  // Estimate tokens (rough estimate: 1 token ≈ 4 characters)
-  const estimatedTokens = Math.ceil(contentLength / 4)
-  
-  // Wait if we're at rate limits
-  if (stats.requestsThisSecond >= MAX_REQUESTS_PER_SECOND) {
-    const waitTime = 1000 - (now - stats.lastSecondReset)
-    if (waitTime > 0) {
-      await new Promise(resolve => setTimeout(resolve, waitTime))
-    }
-  }
-  
-  if (stats.tokensThisMinute + estimatedTokens > MAX_TOKENS_PER_MINUTE) {
-    const waitTime = 60000 - (now - stats.lastMinuteReset)
-    if (waitTime > 0) {
-      // Only log when actually waiting
-      await new Promise(resolve => setTimeout(resolve, waitTime))
-    }
-  }
-}
-
-function updateStats(contentLength: number) {
-  stats.requestsThisSecond++
-  stats.tokensThisMinute += Math.ceil(contentLength / 4)
 }
 
 serve(async (req) => {
-  const requestId = crypto.randomUUID()
-  const logger = new EdgeLogger('process-embeddings', requestId)
-  
   try {
-    logger.info('Received processing request', {
-      method: req.method,
-      url: req.url,
-    })
-    
     // Start background processing
-    processEmbeddings(requestId) // Don't await - let it run in background
+    processEmbeddings() // Don't await - let it run in background
     
     // Return immediately
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Processing started in background',
-        requestId,
         timestamp: new Date().toISOString()
       }),
       { 
@@ -264,13 +134,9 @@ serve(async (req) => {
       }
     )
   } catch (error) {
-    logger.error('Request handler error', error)
+    console.error('[Process Embeddings] Error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: 'Internal server error',
-        requestId,
-        message: config.environment === 'development' ? error.message : undefined
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         headers: { 'Content-Type': 'application/json' },
         status: 500
