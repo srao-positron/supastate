@@ -325,7 +325,13 @@ export class MemoriesAPI {
       })
 
       if (!response.ok) {
-        throw new Error('Semantic search failed')
+        const errorText = await response.text()
+        console.error('[MemoriesAPI] Semantic search failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        })
+        throw new Error(`Semantic search failed: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
