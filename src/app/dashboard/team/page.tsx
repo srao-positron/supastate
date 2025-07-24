@@ -104,10 +104,13 @@ export default function TeamPage() {
 
       if (membersData) {
         // Transform the data to match our interface
-        const transformedMembers = membersData.map(member => ({
-          ...member,
+        const transformedMembers = membersData.map((member: any) => ({
+          user_id: member.user_id,
+          role: member.role,
+          joined_at: member.joined_at,
           user: {
-            ...member.user,
+            id: member.user.id,
+            email: member.user.email,
             user_metadata: member.user.raw_user_meta_data || {}
           }
         }))

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Filter, X } from 'lucide-react'
+import { Search, Filter, X, Sparkles } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,11 +12,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { memoriesAPI } from '@/lib/api/memories'
 import { useDebounce } from '@/hooks/use-debounce'
 
 interface MemorySearchProps {
-  onSearch: (query: string, projectFilter?: string[]) => void
+  onSearch: (query: string, projectFilter?: string[], useSemanticSearch?: boolean) => void
   onProjectFilterChange?: (projects: string[]) => void
   isSearching?: boolean
 }
@@ -30,6 +31,7 @@ export function MemorySearch({
   const [projects, setProjects] = useState<string[]>([])
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [showFilters, setShowFilters] = useState(false)
+  const [useSemanticSearch, setUseSemanticSearch] = useState(true)
   
   const debouncedQuery = useDebounce(query, 1000) // Increased to 1 second for large datasets
 
@@ -49,11 +51,11 @@ export function MemorySearch({
   // Manual search handler
   const handleSearch = useCallback(() => {
     const projectFilter = selectedProject === 'all' ? undefined : [selectedProject]
-    onSearch(query, projectFilter)
+    onSearch(query, projectFilter, useSemanticSearch)
     if (onProjectFilterChange && projectFilter) {
       onProjectFilterChange(projectFilter)
     }
-  }, [query, selectedProject, onSearch, onProjectFilterChange])
+  }, [query, selectedProject, useSemanticSearch, onSearch, onProjectFilterChange])
 
   // Auto-search on Enter key
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -119,35 +121,57 @@ export function MemorySearch({
       </div>
 
       {showFilters && (
-        <div className="flex items-end gap-4 p-4 bg-muted/50 rounded-lg">
-          <div className="flex-1 space-y-2">
-            <Label htmlFor="project-filter">Project</Label>
-            <Select
-              value={selectedProject}
-              onValueChange={setSelectedProject}
-            >
-              <SelectTrigger id="project-filter">
-                <SelectValue placeholder="All projects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All projects</SelectItem>
-                {projects.map((project) => (
-                  <SelectItem key={project} value={project}>
-                    {project}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-end gap-4">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="project-filter">Project</Label>
+              <Select
+                value={selectedProject}
+                onValueChange={setSelectedProject}
+              >
+                <SelectTrigger id="project-filter">
+                  <SelectValue placeholder="All projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All projects</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project} value={project}>
+                      {project}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedProject !== 'all' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedProject('all')}
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
-          {selectedProject !== 'all' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedProject('all')}
-            >
-              Clear filters
-            </Button>
-          )}
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="semantic-search"
+                checked={useSemanticSearch}
+                onCheckedChange={setUseSemanticSearch}
+              />
+              <Label 
+                htmlFor="semantic-search" 
+                className="cursor-pointer flex items-center gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Semantic Search
+                <span className="text-xs text-muted-foreground">
+                  (AI-powered search that understands meaning)
+                </span>
+              </Label>
+            </div>
+          </div>
         </div>
       )}
 

@@ -19,6 +19,7 @@ export interface MemorySearchParams {
   projectFilter?: string[]
   limit?: number
   offset?: number
+  useSemanticSearch?: boolean
 }
 
 export interface MemorySearchResponse {
@@ -63,7 +64,12 @@ export class MemoriesAPI {
   }
 
   async searchMemories(params: MemorySearchParams): Promise<MemorySearchResponse> {
-    const { query, projectFilter, limit = 20, offset = 0 } = params
+    const { query, projectFilter, limit = 20, offset = 0, useSemanticSearch = false } = params
+
+    // If semantic search is enabled and we have a query, use the semantic search endpoint
+    if (useSemanticSearch && query && query.trim()) {
+      return this.semanticSearch(params)
+    }
 
     try {
       const { teamId, userId } = await this.getWorkspaceInfo()
@@ -269,6 +275,40 @@ export class MemoriesAPI {
         totalMemories: 0,
         projectCounts: {},
       }
+    }
+  }
+
+  private async semanticSearch(params: MemorySearchParams): Promise<MemorySearchResponse> {
+    const { query, projectFilter, limit = 20 } = params
+
+    try {
+      const response = await fetch('/api/memories/semantic-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          projectFilter,
+          limit,
+          threshold: 0.7,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Semantic search failed')
+      }
+
+      const data = await response.json()
+      return {
+        results: data.results || [],
+        total: data.total || 0,
+        hasMore: data.hasMore || false,
+      }
+    } catch (error) {
+      console.error('Semantic search error:', error)
+      // Fall back to regular search
+      return this.searchMemories({ ...params, useSemanticSearch: false })
     }
   }
 }

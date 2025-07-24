@@ -81,7 +81,7 @@ export default function MemoriesPage() {
   }
 
   // Search handler with filters
-  const handleSearch = useCallback(async (query: string, projectFilter?: string[], filters?: MemoryFiltersType) => {
+  const handleSearch = useCallback(async (query: string, projectFilter?: string[], filters?: MemoryFiltersType, useSemanticSearch?: boolean) => {
     setIsLoading(true)
     setError(null)
     setCurrentPage(1)
@@ -93,6 +93,7 @@ export default function MemoriesPage() {
         projectFilter: filters?.selectedProjects || projectFilter,
         limit: pageSize * 10, // Get more results for client-side filtering
         offset: 0,
+        useSemanticSearch,
       })
 
       // Apply date and time filters client-side
@@ -256,7 +257,7 @@ export default function MemoriesPage() {
         {/* Detailed Memories Tab */}
         <TabsContent value="details" className="space-y-6">
           <MemorySearch
-            onSearch={(query, projectFilter) => handleSearch(query, projectFilter, activeFilters)}
+            onSearch={(query, projectFilter, useSemanticSearch) => handleSearch(query, projectFilter, activeFilters, useSemanticSearch)}
             isSearching={isLoading}
           />
 
@@ -265,7 +266,7 @@ export default function MemoriesPage() {
             projects={projects}
             onFiltersChange={(filters) => {
               setActiveFilters(filters)
-              handleSearch('', undefined, filters)
+              handleSearch('', undefined, filters, true)
             }}
             isLoading={isLoading}
           />
