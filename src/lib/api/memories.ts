@@ -304,6 +304,12 @@ export class MemoriesAPI {
   private async semanticSearch(params: MemorySearchParams): Promise<MemorySearchResponse> {
     const { query, projectFilter, limit = 20 } = params
 
+    console.log('[MemoriesAPI] semanticSearch called with:', {
+      query,
+      projectFilter,
+      limit
+    })
+
     try {
       const response = await fetch('/api/memories/semantic-search', {
         method: 'POST',
@@ -323,6 +329,13 @@ export class MemoriesAPI {
       }
 
       const data = await response.json()
+      
+      console.log('[MemoriesAPI] semanticSearch response:', {
+        resultsCount: data.results?.length || 0,
+        total: data.total,
+        firstResult: data.results?.[0]
+      })
+      
       return {
         results: data.results || [],
         total: data.total || 0,

@@ -19,6 +19,13 @@ export async function POST(request: NextRequest) {
     // Parse request body
     const { query, projectFilter, limit = 20, threshold = 0.7 } = await request.json()
 
+    console.log('[Semantic Search] Request received:', {
+      query,
+      projectFilter,
+      limit,
+      threshold
+    })
+
     if (!query || typeof query !== 'string') {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 })
     }
