@@ -1,11 +1,15 @@
--- Fix match_memories function to work with JSON string embeddings
+-- Drop all existing versions of match_memories
+DROP FUNCTION IF EXISTS match_memories(text, double precision, integer, uuid, uuid, text[]);
+DROP FUNCTION IF EXISTS match_memories(vector, double precision, integer, uuid, uuid, text[]);
+
+-- Create a single unified match_memories function that handles JSON string embeddings
 CREATE OR REPLACE FUNCTION match_memories (
-  query_embedding text, -- Changed from vector(3072) to text since embeddings are stored as JSON strings
-  match_threshold float,
-  match_count int,
-  filter_user_id uuid DEFAULT NULL,
+  query_embedding text, -- JSON string embedding
+  match_threshold float DEFAULT 0.7,
+  match_count int DEFAULT 20,
   filter_team_id uuid DEFAULT NULL,
-  filter_project_name text DEFAULT NULL
+  filter_user_id uuid DEFAULT NULL,
+  filter_projects text[] DEFAULT NULL -- Array of project names
 )
 RETURNS TABLE (
   id uuid,
@@ -48,7 +52,7 @@ BEGIN
     -- Apply filters
     AND (filter_user_id IS NULL OR m.user_id = filter_user_id)
     AND (filter_team_id IS NULL OR m.team_id = filter_team_id)
-    AND (filter_project_name IS NULL OR m.project_name = filter_project_name)
+    AND (filter_projects IS NULL OR m.project_name = ANY(filter_projects))
   ORDER BY (m.embedding::vector(3072)) <=> (query_embedding::vector(3072)) ASC
   LIMIT match_count;
 END;
