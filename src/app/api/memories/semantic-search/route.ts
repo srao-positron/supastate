@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const { data: searchResults, error: searchError } = await supabase.rpc(
       'match_memories',
       {
-        query_embedding: queryEmbedding,
+        query_embedding: JSON.stringify(queryEmbedding),
         match_threshold: threshold,
         match_count: limit,
         filter_team_id: teamId,
