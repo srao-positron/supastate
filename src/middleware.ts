@@ -75,6 +75,11 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Redirect /dashboard to /memories
+  if (request.nextUrl.pathname === '/dashboard' && user) {
+    return NextResponse.redirect(new URL('/memories', request.url))
+  }
+
   // Protected routes
   if (request.nextUrl.pathname.startsWith('/dashboard') ||
       request.nextUrl.pathname.startsWith('/memories') ||
@@ -90,7 +95,7 @@ export async function middleware(request: NextRequest) {
       !request.nextUrl.pathname.startsWith('/auth/cli/callback') &&
       (request.nextUrl.pathname.startsWith('/auth/login') ||
        request.nextUrl.pathname.startsWith('/auth/signup'))) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/memories', request.url))
   }
 
   return response

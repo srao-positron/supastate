@@ -29,11 +29,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    href: "/dashboard",
-    label: "Overview",
-    icon: Home,
-  },
-  {
     href: "/memories",
     label: "Memory Explorer",
     icon: Brain,
