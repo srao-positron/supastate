@@ -41,13 +41,24 @@ export async function POST(request: NextRequest) {
 
     // Generate embedding for the query
     console.log('[Semantic Search] Generating embedding for query:', query)
-    const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-large',
-      input: query,
-      dimensions: 3072,
-    })
-
-    const queryEmbedding = embeddingResponse.data[0].embedding
+    let queryEmbedding
+    try {
+      const embeddingResponse = await openai.embeddings.create({
+        model: 'text-embedding-3-large',
+        input: query,
+        dimensions: 3072,
+      })
+      queryEmbedding = embeddingResponse.data[0].embedding
+      console.log('[Semantic Search] Embedding generated successfully, length:', queryEmbedding.length)
+    } catch (embeddingError: any) {
+      console.error('[Semantic Search] Embedding generation failed:', embeddingError)
+      return NextResponse.json({ 
+        error: 'Failed to generate embedding', 
+        details: embeddingError.message,
+        apiKeyPresent: !!process.env.OPENAI_API_KEY,
+        apiKeyLength: process.env.OPENAI_API_KEY?.length
+      }, { status: 500 })
+    }
 
     // Perform semantic search
     const { data: searchResults, error: searchError } = await supabase.rpc(
