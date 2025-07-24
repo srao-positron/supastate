@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         match_threshold: threshold,
         match_count: limit,
         filter_team_id: teamId,
-        filter_user_id: teamId ? null : user.id,
+        filter_user_id: user.id, // Always pass user ID to search personal memories too
         filter_projects: projectFilter && projectFilter.length > 0 ? projectFilter : null,
       }
     )
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     const { count } = await supabase
       .from('memories')
       .select('*', { count: 'exact', head: true })
-      .or(teamId ? `team_id.eq.${teamId},and(user_id.eq.${user.id},team_id.is.null)` : `user_id.eq.${user.id}`)
+      .or(teamId ? `team_id.eq.${teamId},user_id.eq.${user.id}` : `user_id.eq.${user.id}`)
 
     console.log('[Semantic Search] Found', searchResults?.length || 0, 'results')
 
