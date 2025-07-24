@@ -73,40 +73,33 @@ const navItems: NavItem[] = [
 export function NavSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [teamName, setTeamName] = useState<string | null>(null)
+  const [userInfo, setUserInfo] = useState<{
+    name: string | null
+    avatar: string | null
+    username: string | null
+  }>({ name: null, avatar: null, username: null })
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    async function fetchTeam() {
+    async function fetchUserInfo() {
       const supabase = createClient()
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Get user's team
-      const { data: teamMember } = await supabase
-        .from("team_members")
-        .select("team_id")
-        .eq("user_id", user.id)
-        .single()
-
-      if (teamMember) {
-        const { data: team } = await supabase
-          .from("teams")
-          .select("name")
-          .eq("id", teamMember.team_id)
-          .single()
-
-        if (team) {
-          setTeamName(team.name)
-        }
-      }
+      // Extract GitHub info from user metadata
+      const metadata = user.user_metadata || {}
+      setUserInfo({
+        name: metadata.full_name || metadata.name || null,
+        avatar: metadata.avatar_url || null,
+        username: metadata.user_name || metadata.username || null
+      })
 
       setIsLoading(false)
     }
 
-    fetchTeam()
+    fetchUserInfo()
   }, [])
 
   const handleSignOut = async () => {
@@ -117,19 +110,29 @@ export function NavSidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-muted/10">
-      {/* Team header */}
+      {/* User header */}
       <div className="p-6">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <span className="text-sm font-bold text-primary">
-              {isLoading ? "..." : teamName?.charAt(0)?.toUpperCase() || "T"}
-            </span>
-          </div>
+        <div className="flex items-center gap-3">
+          {userInfo.avatar ? (
+            <img
+              src={userInfo.avatar}
+              alt={userInfo.name || userInfo.username || "User"}
+              className="h-10 w-10 rounded-full"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-sm font-bold text-primary">
+                {isLoading ? "..." : (userInfo.name || userInfo.username || "U").charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
           <div className="flex-1 truncate">
             <h2 className="text-sm font-semibold truncate">
-              {isLoading ? "Loading..." : teamName || "Your Team"}
+              {isLoading ? "Loading..." : userInfo.name || userInfo.username || "User"}
             </h2>
-            <p className="text-xs text-muted-foreground">Team workspace</p>
+            <p className="text-xs text-muted-foreground">
+              {userInfo.username ? `@${userInfo.username}` : "GitHub User"}
+            </p>
           </div>
         </div>
       </div>
