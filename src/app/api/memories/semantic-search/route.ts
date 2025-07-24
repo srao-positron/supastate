@@ -61,6 +61,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform semantic search
+    console.log('[Semantic Search] Calling match_memories with:', {
+      threshold,
+      limit,
+      filter_team_id: teamId,
+      filter_user_id: user.id,
+      filter_projects: projectFilter
+    })
+    
     const { data: searchResults, error: searchError } = await supabase.rpc(
       'match_memories',
       {
