@@ -7,6 +7,35 @@ These rules ensure consistency with Camille's patterns and maintain code quality
 
 ---
 
+## Rule 0: BUILD BEFORE PUSH - THE GOLDEN RULE
+
+**This overrides ALL other rules. NEVER push without a successful build!**
+
+```bash
+# MANDATORY before EVERY push:
+npm run build
+
+# If this fails, DO NOT PUSH!
+```
+
+**Why this is Rule 0:**
+- Vercel deployments fail silently, wasting time and blocking the team
+- A 30-second local build saves a 5-minute failed deployment
+- Build errors caught locally = immediate fix vs. production debugging
+
+**Full pre-push sequence:**
+```bash
+# Run ALL of these before pushing:
+npm run build      # Must pass!
+npm run lint       # Must pass!
+npm run typecheck  # Must pass!
+
+# For database changes:
+npx supabase db diff  # Review changes first
+```
+
+---
+
 ## Rule 1: Type Safety (From Camille)
 
 ```typescript
@@ -263,3 +292,80 @@ Following Camille's pattern:
 2. Consistent response format
 3. Named pipes for communication
 4. Never throw to MCP client
+
+---
+
+## Quick Reference - Copy & Paste Commands
+
+```bash
+# Before EVERY push (copy this entire line):
+npm run build && npm run lint && npm run typecheck && echo "✅ All checks passed - safe to push!" || echo "❌ FAILED - Do not push!"
+
+# Quick build check:
+npm run build || echo "❌ BUILD FAILED - FIX BEFORE PUSHING!"
+
+# Database deployment:
+npx supabase db diff && npx supabase db push
+
+# After accidental bad push:
+git commit -m "fix: Resolve build error" && git push
+```
+
+---
+
+## Common Build Failures & Quick Fixes
+
+### 1. Missing UI Component
+```bash
+Error: Module not found: Can't resolve '@/components/ui/switch'
+
+# Quick fix:
+1. Create the component in src/components/ui/
+2. Install Radix package: npm install @radix-ui/react-switch
+3. Run build again: npm run build
+```
+
+### 2. TypeScript Errors
+```bash
+Error: Property 'X' does not exist on type 'Y'
+
+# Quick fix:
+1. Run: npm run typecheck
+2. Fix all red underlines in your editor
+3. Run build again: npm run build
+```
+
+### 3. Missing Dependencies
+```bash
+Error: Cannot find module 'package-name'
+
+# Quick fix:
+1. Install: npm install package-name
+2. Run build: npm run build
+3. Commit both package.json and package-lock.json
+```
+
+### 4. Environment Variables
+```bash
+Error: NEXT_PUBLIC_X is not defined
+
+# Quick fix:
+1. Check .env.example for required vars
+2. Add to .env.local
+3. Restart dev server: npm run dev
+4. Add to Vercel dashboard before deploy
+```
+
+---
+
+## The One Rule That Matters Most
+
+If you forget everything else, remember:
+
+```bash
+npm run build  # THIS MUST PASS BEFORE EVERY PUSH
+```
+
+**No exceptions. No "I'll fix it later." No "It works on my machine."**
+
+Build locally or break production - the choice is yours!
