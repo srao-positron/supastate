@@ -318,7 +318,7 @@ export class MemoriesAPI {
         },
         body: JSON.stringify({
           query,
-          projectFilter,
+          projectFilter: projectFilter || null,  // Convert undefined to null
           limit,
           threshold: 0.7,
         }),
