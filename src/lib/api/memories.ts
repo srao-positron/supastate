@@ -32,7 +32,15 @@ export class MemoriesAPI {
   private supabase = createClient()
 
   private async getWorkspaceInfo(): Promise<{ teamId: string | null; userId: string | null }> {
-    const { data: { user } } = await this.supabase.auth.getUser()
+    const { data: { user }, error: userError } = await this.supabase.auth.getUser()
+    
+    // Debug logging
+    console.log('[MemoriesAPI] getWorkspaceInfo - auth check:', {
+      hasUser: !!user,
+      userId: user?.id,
+      userError: userError?.message
+    })
+    
     if (!user) return { teamId: null, userId: null }
 
     // Check if user is part of a team
@@ -43,20 +51,23 @@ export class MemoriesAPI {
       .limit(1)
 
     // Debug logging
-    console.log('[MemoriesAPI] getWorkspaceInfo:', {
+    console.log('[MemoriesAPI] getWorkspaceInfo - team check:', {
       userId: user.id,
       teamMembers,
-      error: error?.message
+      error: error?.message,
+      hasTeam: teamMembers && teamMembers.length > 0
     })
 
     // If there's an error or no team membership, just use personal workspace
     if (error || !teamMembers || teamMembers.length === 0) {
+      console.log('[MemoriesAPI] Using personal workspace')
       return {
         teamId: null,
         userId: user.id
       }
     }
 
+    console.log('[MemoriesAPI] Using team workspace:', teamMembers[0]?.team_id)
     return {
       teamId: teamMembers[0]?.team_id || null,
       userId: user.id
@@ -84,9 +95,13 @@ export class MemoriesAPI {
       // Filter by workspace (team or personal)
       // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        queryBuilder = queryBuilder.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
+        // Show memories where:
+        // 1. team_id matches the user's team OR
+        // 2. user_id matches and team_id is null (personal memories)
+        queryBuilder = queryBuilder.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
       } else {
-        queryBuilder = queryBuilder.eq('user_id', userId).is('team_id', null)
+        // User not in a team - only show their personal memories
+        queryBuilder = queryBuilder.eq('user_id', userId)
       }
 
       // Only apply text search if query is not empty
@@ -107,10 +122,16 @@ export class MemoriesAPI {
         userId,
         count,
         error: error?.message,
-        dataLength: data?.length
+        errorDetails: error,
+        dataLength: data?.length,
+        query,
+        projectFilter
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('[MemoriesAPI] Search error details:', error)
+        throw error
+      }
 
       return {
         results: data || [],
@@ -136,9 +157,9 @@ export class MemoriesAPI {
       // Filter by workspace
       // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        query = query.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
+        query = query.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
       } else {
-        query = query.eq('user_id', userId).is('team_id', null)
+        query = query.eq('user_id', userId)
       }
       
       const { data, error } = await query.single()
@@ -172,9 +193,9 @@ export class MemoriesAPI {
       // Filter by workspace
       // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        query = query.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
+        query = query.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
       } else {
-        query = query.eq('user_id', userId).is('team_id', null)
+        query = query.eq('user_id', userId)
       }
       
       const { data, error } = await query
@@ -200,9 +221,9 @@ export class MemoriesAPI {
       // Filter by workspace
       // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        query = query.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
+        query = query.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
       } else {
-        query = query.eq('user_id', userId).is('team_id', null)
+        query = query.eq('user_id', userId)
       }
       
       // Get all results to ensure we capture all unique projects
@@ -237,10 +258,11 @@ export class MemoriesAPI {
         .from('memories')
         .select('*', { count: 'exact', head: true })
       
+      // Filter by workspace - show both team memories AND personal memories
       if (teamId) {
-        countQuery = countQuery.eq('team_id', teamId)
+        countQuery = countQuery.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
       } else {
-        countQuery = countQuery.eq('user_id', userId).is('team_id', null)
+        countQuery = countQuery.eq('user_id', userId)
       }
       
       const { count: totalCount } = await countQuery
@@ -250,10 +272,11 @@ export class MemoriesAPI {
         .from('memories')
         .select('project_name')
       
+      // Filter by workspace - show both team memories AND personal memories
       if (teamId) {
-        projectQuery = projectQuery.eq('team_id', teamId)
+        projectQuery = projectQuery.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
       } else {
-        projectQuery = projectQuery.eq('user_id', userId).is('team_id', null)
+        projectQuery = projectQuery.eq('user_id', userId)
       }
       
       const { data: projectData, error } = await projectQuery

@@ -89,7 +89,7 @@ npx supabase db diff
 npm run dev
 
 # Pre-deployment checks (MANDATORY before push)
-npm run build && npm run lint && npm run typecheck
+npm run build && npm run lint && npm run type-check
 
 # Database
 npx supabase db diff
@@ -111,7 +111,7 @@ npx supabase gen types typescript --local > src/types/supabase.ts
 - [ ] 5. **Implement feature** following existing patterns
 - [ ] 6. **Run full pre-push checks**:
   ```bash
-  npm run build && npm run lint && npm run typecheck
+  npm run build && npm run lint && npm run type-check
   ```
 - [ ] 7. **Test locally** with `npm run dev`
 - [ ] 8. **Commit with proper message** (fix:, feat:, etc.)

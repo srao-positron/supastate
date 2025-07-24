@@ -28,7 +28,7 @@ npm run build
 # Run ALL of these before pushing:
 npm run build      # Must pass!
 npm run lint       # Must pass!
-npm run typecheck  # Must pass!
+npm run type-check  # Must pass!
 
 # For database changes:
 npx supabase db diff  # Review changes first
@@ -299,7 +299,7 @@ Following Camille's pattern:
 
 ```bash
 # Before EVERY push (copy this entire line):
-npm run build && npm run lint && npm run typecheck && echo "✅ All checks passed - safe to push!" || echo "❌ FAILED - Do not push!"
+npm run build && npm run lint && npm run type-check && echo "✅ All checks passed - safe to push!" || echo "❌ FAILED - Do not push!"
 
 # Quick build check:
 npm run build || echo "❌ BUILD FAILED - FIX BEFORE PUSHING!"
@@ -330,7 +330,7 @@ Error: Module not found: Can't resolve '@/components/ui/switch'
 Error: Property 'X' does not exist on type 'Y'
 
 # Quick fix:
-1. Run: npm run typecheck
+1. Run: npm run type-check
 2. Fix all red underlines in your editor
 3. Run build again: npm run build
 ```
