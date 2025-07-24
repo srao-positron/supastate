@@ -12,20 +12,28 @@ export async function GET() {
     }
 
     // Determine workspace
-    const { data: teamMember } = await supabase
+    const { data: teamMembers } = await supabase
       .from('team_members')
       .select('team_id')
       .eq('user_id', user.id)
-      .single()
+      .limit(1)
 
-    const workspaceId = teamMember?.team_id || user.id
+    const teamId = teamMembers?.[0]?.team_id
 
     // Fetch project summaries
-    const { data: summaries, error } = await supabase
+    let query = supabase
       .from('project_summaries')
       .select('*')
-      .eq('workspace_id', workspaceId)
       .order('updated_at', { ascending: false })
+
+    // If user is part of a team, show both team summaries AND their personal summaries
+    if (teamId) {
+      query = query.or(`workspace_id.eq.${teamId},workspace_id.eq.${user.id}`)
+    } else {
+      query = query.eq('workspace_id', user.id)
+    }
+
+    const { data: summaries, error } = await query
 
     if (error) {
       console.error('Error fetching summaries:', error)

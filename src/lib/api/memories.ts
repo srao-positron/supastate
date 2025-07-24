@@ -41,6 +41,13 @@ export class MemoriesAPI {
       .eq('user_id', user.id)
       .limit(1)
 
+    // Debug logging
+    console.log('[MemoriesAPI] getWorkspaceInfo:', {
+      userId: user.id,
+      teamMembers,
+      error: error?.message
+    })
+
     // If there's an error or no team membership, just use personal workspace
     if (error || !teamMembers || teamMembers.length === 0) {
       return {
@@ -69,8 +76,9 @@ export class MemoriesAPI {
         .range(offset, offset + limit - 1)
       
       // Filter by workspace (team or personal)
+      // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        queryBuilder = queryBuilder.eq('team_id', teamId)
+        queryBuilder = queryBuilder.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
       } else {
         queryBuilder = queryBuilder.eq('user_id', userId).is('team_id', null)
       }
@@ -86,6 +94,15 @@ export class MemoriesAPI {
       }
 
       const { data, error, count } = await queryBuilder
+
+      // Debug logging
+      console.log('[MemoriesAPI] searchMemories result:', {
+        teamId,
+        userId,
+        count,
+        error: error?.message,
+        dataLength: data?.length
+      })
 
       if (error) throw error
 
@@ -111,8 +128,9 @@ export class MemoriesAPI {
         .eq('id', id)
       
       // Filter by workspace
+      // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        query = query.eq('team_id', teamId)
+        query = query.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
       } else {
         query = query.eq('user_id', userId).is('team_id', null)
       }
@@ -146,8 +164,9 @@ export class MemoriesAPI {
         .order('created_at', { ascending: false })
       
       // Filter by workspace
+      // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        query = query.eq('team_id', teamId)
+        query = query.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
       } else {
         query = query.eq('user_id', userId).is('team_id', null)
       }
@@ -173,8 +192,9 @@ export class MemoriesAPI {
         .select('project_name')
       
       // Filter by workspace
+      // If user is part of a team, show both team memories AND their personal memories
       if (teamId) {
-        query = query.eq('team_id', teamId)
+        query = query.or(`team_id.eq.${teamId},and(user_id.eq.${userId},team_id.is.null)`)
       } else {
         query = query.eq('user_id', userId).is('team_id', null)
       }
