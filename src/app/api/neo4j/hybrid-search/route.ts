@@ -32,9 +32,10 @@ export async function POST(request: NextRequest) {
       await neo4jService.initialize()
     } catch (initError) {
       console.error('[HybridSearch] Failed to initialize Neo4j:', initError)
+      const errorMessage = initError instanceof Error ? initError.message : 'Unknown error'
       return NextResponse.json({
         error: 'Failed to connect to Neo4j database',
-        details: process.env.NODE_ENV === 'development' ? initError.message : undefined
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
       }, { status: 503 })
     }
 
