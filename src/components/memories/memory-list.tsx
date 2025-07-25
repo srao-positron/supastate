@@ -105,11 +105,24 @@ export function MemoryList({
 
   if (!isLoading && memories.length === 0) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">No memories found</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Try adjusting your search query or filters
-        </p>
+      <div className="text-center py-12 px-4">
+        <div className="max-w-md mx-auto">
+          <p className="text-lg font-medium text-muted-foreground">No memories found</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {error ? 
+              'There was an issue connecting to the memory database. Please check that Neo4j is running and try again.' :
+              'Start creating memories by using the Camille extension in VS Code while working on your projects.'
+            }
+          </p>
+          {!error && (
+            <p className="text-sm text-muted-foreground mt-4">
+              Memories are automatically created when you:
+              <br />• Have conversations about code in VS Code
+              <br />• Debug issues and find solutions
+              <br />• Learn new concepts and patterns
+            </p>
+          )}
+        </div>
       </div>
     )
   }

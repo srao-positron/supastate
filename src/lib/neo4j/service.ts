@@ -39,44 +39,50 @@ export class Neo4jService {
       teamFilter 
     } = options
 
-    const query = `
-      CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
-      YIELD node as memory, score
-      WHERE score > $threshold
-        ${projectFilter ? 'AND memory.project_name = $projectFilter' : ''}
-        ${userFilter ? 'AND memory.user_id = $userFilter' : ''}
-        ${teamFilter ? 'AND memory.team_id = $teamFilter' : ''}
-      RETURN memory, score
-      ORDER BY score DESC
-    `
+    try {
+      const query = `
+        CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
+        YIELD node as memory, score
+        WHERE score > $threshold
+          ${projectFilter ? 'AND memory.project_name = $projectFilter' : ''}
+          ${userFilter ? 'AND memory.user_id = $userFilter' : ''}
+          ${teamFilter ? 'AND memory.team_id = $teamFilter' : ''}
+        RETURN memory, score
+        ORDER BY score DESC
+      `
 
-    const result = await executeQuery(query, {
-      embedding,
-      limit,
-      threshold,
-      projectFilter,
-      userFilter,
-      teamFilter
-    })
+      const result = await executeQuery(query, {
+        embedding,
+        limit,
+        threshold,
+        projectFilter,
+        userFilter,
+        teamFilter
+      })
 
-    return result.records.map(record => {
-      const memory = record.memory
-      return {
-        node: {
-          id: memory.properties?.id || memory.id,
-          content: memory.properties?.content || memory.content,
-          embedding: memory.properties?.embedding || memory.embedding,
-          project_name: memory.properties?.project_name || memory.project_name,
-          user_id: memory.properties?.user_id || memory.user_id,
-          team_id: memory.properties?.team_id || memory.team_id,
-          type: memory.properties?.type || memory.type,
-          created_at: memory.properties?.created_at || memory.created_at,
-          updated_at: memory.properties?.updated_at || memory.updated_at,
-          metadata: memory.properties?.metadata ? JSON.parse(memory.properties.metadata) : memory.metadata
-        } as MemoryNode,
-        score: record.score
-      }
-    })
+      return result.records.map(record => {
+        const memory = record.memory
+        return {
+          node: {
+            id: memory.properties?.id || memory.id,
+            content: memory.properties?.content || memory.content,
+            embedding: memory.properties?.embedding || memory.embedding,
+            project_name: memory.properties?.project_name || memory.project_name,
+            user_id: memory.properties?.user_id || memory.user_id,
+            team_id: memory.properties?.team_id || memory.team_id,
+            type: memory.properties?.type || memory.type,
+            created_at: memory.properties?.created_at || memory.created_at,
+            updated_at: memory.properties?.updated_at || memory.updated_at,
+            metadata: memory.properties?.metadata ? JSON.parse(memory.properties.metadata) : memory.metadata
+          } as MemoryNode,
+          score: record.score
+        }
+      })
+    } catch (error) {
+      console.error('[Neo4j] Vector search error:', error)
+      // Return empty results if index doesn't exist or other errors
+      return []
+    }
   }
 
   /**
@@ -85,43 +91,49 @@ export class Neo4jService {
   async searchCodeByVector(options: VectorSearchOptions): Promise<SearchResult<CodeEntityNode>[]> {
     const { embedding, limit = 20, threshold = 0.7, projectFilter } = options
 
-    const query = `
-      CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
-      YIELD node as code, score
-      WHERE score > $threshold
-        ${projectFilter ? 'AND code.project_name = $projectFilter' : ''}
-      RETURN code, score
-      ORDER BY score DESC
-    `
+    try {
+      const query = `
+        CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
+        YIELD node as code, score
+        WHERE score > $threshold
+          ${projectFilter ? 'AND code.project_name = $projectFilter' : ''}
+        RETURN code, score
+        ORDER BY score DESC
+      `
 
-    const result = await executeQuery(query, {
-      embedding,
-      limit,
-      threshold,
-      projectFilter
-    })
+      const result = await executeQuery(query, {
+        embedding,
+        limit,
+        threshold,
+        projectFilter
+      })
 
-    return result.records.map(record => {
-      const code = record.code
-      return {
-        node: {
-          id: code.properties?.id || code.id,
-          name: code.properties?.name || code.name,
-          type: code.properties?.type || code.type,
-          file_path: code.properties?.file_path || code.file_path,
-          project_name: code.properties?.project_name || code.project_name,
-          line_start: code.properties?.line_start || code.line_start,
-          line_end: code.properties?.line_end || code.line_end,
-          signature: code.properties?.signature || code.signature,
-          visibility: code.properties?.visibility || code.visibility,
-          is_exported: code.properties?.is_exported || code.is_exported,
-          embedding: code.properties?.embedding || code.embedding,
-          metadata: code.properties?.metadata ? JSON.parse(code.properties.metadata) : code.metadata,
-          language: code.properties?.language || code.language || 'typescript'
-        } as CodeEntityNode,
-        score: record.score
-      }
-    })
+      return result.records.map(record => {
+        const code = record.code
+        return {
+          node: {
+            id: code.properties?.id || code.id,
+            name: code.properties?.name || code.name,
+            type: code.properties?.type || code.type,
+            file_path: code.properties?.file_path || code.file_path,
+            project_name: code.properties?.project_name || code.project_name,
+            line_start: code.properties?.line_start || code.line_start,
+            line_end: code.properties?.line_end || code.line_end,
+            signature: code.properties?.signature || code.signature,
+            visibility: code.properties?.visibility || code.visibility,
+            is_exported: code.properties?.is_exported || code.is_exported,
+            embedding: code.properties?.embedding || code.embedding,
+            metadata: code.properties?.metadata ? JSON.parse(code.properties.metadata) : code.metadata,
+            language: code.properties?.language || code.language || 'typescript'
+          } as CodeEntityNode,
+          score: record.score
+        }
+      })
+    } catch (error) {
+      console.error('[Neo4j] Code vector search error:', error)
+      // Return empty results if index doesn't exist or other errors
+      return []
+    }
   }
 
   // ============= GRAPH OPERATIONS =============
@@ -188,48 +200,54 @@ export class Neo4jService {
   async hybridSearch(options: HybridSearchOptions): Promise<SearchResult<any>[]> {
     const { embedding, filters, includeRelated } = options
 
-    let query = `
-      // Start with vector similarity if embedding provided
-      ${embedding ? `
-        CALL db.index.vector.queryNodes('memory_embeddings', 50, $embedding)
-        YIELD node as memory, score
-        WHERE score > ${filters.minSimilarity || 0.5}
-      ` : 'MATCH (memory:Memory)'}
-      
-      // Apply filters
-      ${filters.projectName ? 'WHERE memory.project_name = $projectName' : ''}
-      ${filters.timeRange ? `
-        AND datetime(memory.created_at) >= datetime($startTime)
-        AND datetime(memory.created_at) <= datetime($endTime)
-      ` : ''}
-      
-      // Include related nodes if requested
-      ${includeRelated ? `
-        OPTIONAL MATCH (memory)-[r:${includeRelated.types.join('|:')}*1..${includeRelated.maxDepth}]-(related)
-        WITH memory, ${embedding ? 'score,' : ''} collect(DISTINCT related) as relatedNodes
-      ` : ''}
-      
-      RETURN memory, 
-             ${embedding ? 'score,' : '0.5 as score,'}
-             ${includeRelated ? 'relatedNodes' : '[] as relatedNodes'}
-      ORDER BY score DESC
-      LIMIT 30
-    `
+    try {
+      let query = `
+        // Start with vector similarity if embedding provided
+        ${embedding ? `
+          CALL db.index.vector.queryNodes('memory_embeddings', 50, $embedding)
+          YIELD node as memory, score
+          WHERE score > ${filters.minSimilarity || 0.5}
+        ` : 'MATCH (memory:Memory)'}
+        
+        // Apply filters
+        ${filters.projectName ? 'WHERE memory.project_name = $projectName' : ''}
+        ${filters.timeRange ? `
+          AND datetime(memory.created_at) >= datetime($startTime)
+          AND datetime(memory.created_at) <= datetime($endTime)
+        ` : ''}
+        
+        // Include related nodes if requested
+        ${includeRelated ? `
+          OPTIONAL MATCH (memory)-[r:${includeRelated.types.join('|:')}*1..${includeRelated.maxDepth}]-(related)
+          WITH memory, ${embedding ? 'score,' : ''} collect(DISTINCT related) as relatedNodes
+        ` : ''}
+        
+        RETURN memory, 
+               ${embedding ? 'score,' : '0.5 as score,'}
+               ${includeRelated ? 'relatedNodes' : '[] as relatedNodes'}
+        ORDER BY score DESC
+        LIMIT 30
+      `
 
-    const params: any = {
-      embedding,
-      projectName: filters.projectName,
-      startTime: filters.timeRange?.start.toISOString(),
-      endTime: filters.timeRange?.end.toISOString()
+      const params: any = {
+        embedding,
+        projectName: filters.projectName,
+        startTime: filters.timeRange?.start.toISOString(),
+        endTime: filters.timeRange?.end.toISOString()
+      }
+
+      const result = await executeQuery(query, params)
+
+      return result.records.map(record => ({
+        node: record.memory,
+        score: record.score,
+        relationships: record.relatedNodes
+      }))
+    } catch (error) {
+      console.error('[Neo4j] Hybrid search error:', error)
+      // Return empty results if there's an error
+      return []
     }
-
-    const result = await executeQuery(query, params)
-
-    return result.records.map(record => ({
-      node: record.memory,
-      score: record.score,
-      relationships: record.relatedNodes
-    }))
   }
 
   // ============= KNOWLEDGE EVOLUTION =============

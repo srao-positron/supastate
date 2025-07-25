@@ -59,6 +59,15 @@ export default function MemoriesPage() {
         await loadProjectSummaries()
       } catch (error) {
         console.error('Failed to load initial data:', error)
+        // Set empty state so the UI still renders
+        setStats({ totalMemories: 0, projectCounts: {} })
+        setProjects([])
+        setMemories([])
+        setSearchResponse({
+          results: [],
+          total: 0,
+          hasMore: false
+        })
       }
     }
     loadInitialData()
@@ -125,12 +134,23 @@ export default function MemoriesPage() {
         hasMore: filteredMemories.results.length > pageSize
       })
     } catch (err) {
-      setError('Failed to search memories. Please try again.')
-      toast({
-        title: 'Search Error',
-        description: 'Failed to search memories. Please try again.',
-        variant: 'destructive',
-      })
+      console.error('Search error:', err)
+      // Don't show error for empty results
+      if (err instanceof Error && err.message.includes('empty')) {
+        setMemories([])
+        setSearchResponse({
+          results: [],
+          total: 0,
+          hasMore: false
+        })
+      } else {
+        setError('Unable to connect to memory database. Please check your connection.')
+        toast({
+          title: 'Connection Error',
+          description: 'Unable to connect to memory database. Please ensure the database is running.',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setIsLoading(false)
     }

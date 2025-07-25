@@ -51,84 +51,90 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform search based on type
-    switch (searchType) {
-      case 'vector':
-        // Pure vector search across memories and code
-        const [memoryResults, codeResults] = await Promise.all([
-          neo4jService.searchMemoriesByVector({
-            embedding: embedding!,
-            limit: limit / 2,
-            threshold: filters.minSimilarity || 0.6,
-            projectFilter: filters.projectName,
-            userFilter: filters.onlyMyContent ? user.id : undefined,
-            teamFilter: filters.teamId
-          }),
-          neo4jService.searchCodeByVector({
-            embedding: embedding!,
-            limit: limit / 2,
-            threshold: filters.minSimilarity || 0.6,
-            projectFilter: filters.projectName
-          })
-        ])
-        
-        results = [
-          ...memoryResults.map(r => ({ ...r, nodeType: 'Memory' })),
-          ...codeResults.map(r => ({ ...r, nodeType: 'CodeEntity' }))
-        ].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, limit)
-        break
+    try {
+      switch (searchType) {
+        case 'vector':
+          // Pure vector search across memories and code
+          const [memoryResults, codeResults] = await Promise.all([
+            neo4jService.searchMemoriesByVector({
+              embedding: embedding!,
+              limit: limit / 2,
+              threshold: filters.minSimilarity || 0.6,
+              projectFilter: filters.projectName,
+              userFilter: filters.onlyMyContent ? user.id : undefined,
+              teamFilter: filters.teamId
+            }),
+            neo4jService.searchCodeByVector({
+              embedding: embedding!,
+              limit: limit / 2,
+              threshold: filters.minSimilarity || 0.6,
+              projectFilter: filters.projectName
+            })
+          ])
+          
+          results = [
+            ...memoryResults.map(r => ({ ...r, nodeType: 'Memory' })),
+            ...codeResults.map(r => ({ ...r, nodeType: 'CodeEntity' }))
+          ].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, limit)
+          break
 
-      case 'graph':
-        // Pure graph traversal from a starting node
-        if (!filters.startNodeId) {
+        case 'graph':
+          // Pure graph traversal from a starting node
+          if (!filters.startNodeId) {
+            return NextResponse.json(
+              { error: 'startNodeId required for graph search' }, 
+              { status: 400 }
+            )
+          }
+          
+          const graphResults = await neo4jService.findRelatedNodes({
+            startNodeId: filters.startNodeId,
+            relationshipTypes: filters.relationshipTypes || [],
+            maxDepth: filters.maxDepth || 3,
+            direction: filters.direction || 'BOTH'
+          })
+          
+          results = graphResults.map(r => ({
+            ...r,
+            nodeType: r.node.labels?.[0] || 'Unknown'
+          }))
+          break
+
+        case 'hybrid':
+          // Combine vector similarity with graph relationships
+          const hybridResults = await neo4jService.hybridSearch({
+            embedding,
+            filters: {
+              projectName: filters.projectName,
+              timeRange: filters.timeRange ? {
+                start: new Date(filters.timeRange.start),
+                end: new Date(filters.timeRange.end)
+              } : undefined,
+              minSimilarity: filters.minSimilarity
+            },
+            includeRelated: includeRelated ? {
+              types: includeRelated.types || ['DISCUSSES', 'PRECEDED_BY', 'LED_TO_UNDERSTANDING'],
+              maxDepth: includeRelated.maxDepth || 2
+            } : undefined
+          })
+          
+          results = hybridResults.map(r => ({
+            ...r,
+            nodeType: 'Memory',
+            relatedCount: r.relationships?.length || 0
+          }))
+          break
+
+        default:
           return NextResponse.json(
-            { error: 'startNodeId required for graph search' }, 
+            { error: 'Invalid search type' }, 
             { status: 400 }
           )
-        }
-        
-        const graphResults = await neo4jService.findRelatedNodes({
-          startNodeId: filters.startNodeId,
-          relationshipTypes: filters.relationshipTypes || [],
-          maxDepth: filters.maxDepth || 3,
-          direction: filters.direction || 'BOTH'
-        })
-        
-        results = graphResults.map(r => ({
-          ...r,
-          nodeType: r.node.labels?.[0] || 'Unknown'
-        }))
-        break
-
-      case 'hybrid':
-        // Combine vector similarity with graph relationships
-        const hybridResults = await neo4jService.hybridSearch({
-          embedding,
-          filters: {
-            projectName: filters.projectName,
-            timeRange: filters.timeRange ? {
-              start: new Date(filters.timeRange.start),
-              end: new Date(filters.timeRange.end)
-            } : undefined,
-            minSimilarity: filters.minSimilarity
-          },
-          includeRelated: includeRelated ? {
-            types: includeRelated.types || ['DISCUSSES', 'PRECEDED_BY', 'LED_TO_UNDERSTANDING'],
-            maxDepth: includeRelated.maxDepth || 2
-          } : undefined
-        })
-        
-        results = hybridResults.map(r => ({
-          ...r,
-          nodeType: 'Memory',
-          relatedCount: r.relationships?.length || 0
-        }))
-        break
-
-      default:
-        return NextResponse.json(
-          { error: 'Invalid search type' }, 
-          { status: 400 }
-        )
+      }
+    } catch (searchError) {
+      console.error(`[HybridSearch] ${searchType} search error:`, searchError)
+      // If it's a Neo4j connection error or empty result, handle gracefully
+      results = []
     }
 
     // Get additional context for top results

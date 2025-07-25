@@ -107,6 +107,15 @@ export class MemoriesAPI {
 
       const data = await response.json()
       
+      // Handle empty results gracefully
+      if (!data.results || data.results.length === 0) {
+        return {
+          results: [],
+          total: 0,
+          hasMore: false
+        }
+      }
+      
       // Convert Neo4j results to Memory format
       const memories: Memory[] = data.results.map((result: any) => ({
         id: result.node?.id || result.key,
