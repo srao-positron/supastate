@@ -76,7 +76,7 @@ async function processMemoryBatch(chunks: any[], openai: OpenAI, supabase: any) 
         // Generate embedding
         // Truncate content if it's too large (roughly 4 chars per token)
         let content = chunk.content
-        const maxChars = 8192 * 4 // ~32k characters for 8k tokens
+        const maxChars = 7000 * 4 // ~28k characters for 7k tokens (leaving buffer for safety)
         if (content.length > maxChars) {
           console.log(`[Process Embeddings] Truncating chunk ${chunk.id} from ${content.length} to ${maxChars} chars`)
           content = content.substring(0, maxChars)
@@ -285,7 +285,7 @@ async function processEmbeddingsBackground(taskId: string) {
   }
 }
 
-serve(async (req) => {
+serve(async (req, connInfo) => {
   try {
     // Verify Neo4j connectivity first
     const driver = getDriver()
@@ -295,10 +295,20 @@ serve(async (req) => {
     // Create a unique task ID
     const taskId = crypto.randomUUID()
     
-    // Start processing in background (don't await)
-    processEmbeddingsBackground(taskId).catch(error => {
-      console.error(`[Process Embeddings] Background task ${taskId} failed:`, error)
-    })
+    // Use EdgeRuntime.waitUntil for proper background task handling
+    const runtime = connInfo as any
+    if (runtime?.waitUntil) {
+      runtime.waitUntil(
+        processEmbeddingsBackground(taskId).catch(error => {
+          console.error(`[Process Embeddings] Background task ${taskId} failed:`, error)
+        })
+      )
+    } else {
+      // Fallback for local development or if waitUntil is not available
+      processEmbeddingsBackground(taskId).catch(error => {
+        console.error(`[Process Embeddings] Background task ${taskId} failed:`, error)
+      })
+    }
     
     // Return immediately
     return new Response(

@@ -74,7 +74,7 @@ Write a single paragraph project summary (third-person perspective):`
   return data.content[0].text
 }
 
-serve(async (req) => {
+serve(async (req, connInfo) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
