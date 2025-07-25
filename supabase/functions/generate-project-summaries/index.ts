@@ -1,8 +1,30 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import neo4j from 'https://esm.sh/neo4j-driver@5.28.1'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const CLAUDE_MODEL = 'claude-3-opus-20240229'
+
+// Initialize Neo4j driver
+function getNeo4jDriver() {
+  const NEO4J_URI = Deno.env.get('NEO4J_URI') || 'neo4j+s://eb61aceb.databases.neo4j.io'
+  const NEO4J_USER = Deno.env.get('NEO4J_USER') || 'neo4j'
+  const NEO4J_PASSWORD = Deno.env.get('NEO4J_PASSWORD')
+
+  if (!NEO4J_PASSWORD) {
+    throw new Error('NEO4J_PASSWORD environment variable is required')
+  }
+
+  return neo4j.driver(
+    NEO4J_URI,
+    neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD),
+    {
+      maxConnectionPoolSize: 50,
+      connectionAcquisitionTimeout: 60000,
+      maxTransactionRetryTime: 30000
+    }
+  )
+}
 
 async function generateSummary(projectName: string, memories: any[]): Promise<string> {
   const recentMemories = memories
@@ -58,30 +80,42 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Get all unique projects with recent activity
-    const { data: projects, error: projectsError } = await supabase
-      .from('memories')
-      .select('project_name, team_id, user_id, created_at')
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(10000) // Limit to prevent timeout
+    // Initialize Neo4j driver
+    const driver = getNeo4jDriver()
+    const session = driver.session()
     
-    if (projectsError) throw projectsError
-    
-    console.log(`[Generate Summaries] Retrieved ${projects?.length || 0} memory rows`)
-    
-    // Group by project and workspace
-    const projectMap = new Map<string, { workspace_id: string; latest: string }>()
-    projects?.forEach(p => {
-      const workspace_id = p.team_id || p.user_id
-      const key = `${workspace_id}:${p.project_name}`
-      if (!projectMap.has(key) || new Date(p.created_at) > new Date(projectMap.get(key)!.latest)) {
-        projectMap.set(key, {
-          workspace_id: workspace_id,
-          latest: p.created_at
-        })
-      }
-    })
+    try {
+      // Get all unique projects with recent activity from Neo4j
+      const result = await session.run(`
+        MATCH (m:Memory)
+        WHERE m.created_at >= datetime() - duration('P1D')
+        WITH m.project_name as project_name, 
+             COALESCE(m.team_id, m.user_id) as workspace_id,
+             m.created_at as created_at
+        WITH project_name, workspace_id, max(created_at) as latest_created_at
+        WHERE project_name IS NOT NULL AND workspace_id IS NOT NULL
+        RETURN project_name, workspace_id, latest_created_at
+        ORDER BY latest_created_at DESC
+        LIMIT 10000
+      `)
+      
+      console.log(`[Generate Summaries] Retrieved ${result.records.length} project records from Neo4j`)
+      
+      // Group by project and workspace
+      const projectMap = new Map<string, { workspace_id: string; latest: string }>()
+      result.records.forEach(record => {
+        const project_name = record.get('project_name')
+        const workspace_id = record.get('workspace_id')
+        const latest = record.get('latest_created_at')
+        
+        if (project_name && workspace_id) {
+          const key = `${workspace_id}:${project_name}`
+          projectMap.set(key, {
+            workspace_id: workspace_id,
+            latest: latest.toString()
+          })
+        }
+      })
 
     console.log(`[Generate Summaries] Found ${projectMap.size} projects with recent activity`)
     console.log(`[Generate Summaries] Projects:`, Array.from(projectMap.keys()))
@@ -119,33 +153,33 @@ serve(async (req) => {
         }
       }
 
-      // Get memories for this project based on team_id or user_id
-      let memoriesQuery = supabase
-        .from('memories')
-        .select('*')
-        .eq('project_name', project_name)
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(100)
-      
-      // Add workspace filter
-      if (workspace_id.length === 36) { // UUID length, could be team or user
-        memoriesQuery = memoriesQuery.or(`team_id.eq.${workspace_id},user_id.eq.${workspace_id}`)
-      }
-      
-      const { data: memories, error: memoriesError } = await memoriesQuery
-
-      if (memoriesError) throw memoriesError
-
-      if (!memories || memories.length === 0) {
-        console.log(`[Generate Summaries] No memories found for ${project_name}`)
-        return null
-      }
-
-      console.log(`[Generate Summaries] Generating summary for ${project_name} with ${memories.length} memories`)
-
+      // Get memories for this project from Neo4j
+      const memoriesSession = driver.session()
       try {
-        const summary = await generateSummary(project_name, memories)
+        const memoriesResult = await memoriesSession.run(`
+          MATCH (m:Memory)
+          WHERE m.project_name = $project_name
+            AND (m.team_id = $workspace_id OR m.user_id = $workspace_id)
+            AND m.created_at >= datetime() - duration('P1D')
+          RETURN m.content as content, m.created_at as created_at
+          ORDER BY m.created_at DESC
+          LIMIT 100
+        `, { project_name, workspace_id })
+        
+        const memories = memoriesResult.records.map(record => ({
+          content: record.get('content'),
+          created_at: record.get('created_at').toString()
+        }))
+        
+        if (!memories || memories.length === 0) {
+          console.log(`[Generate Summaries] No memories found for ${project_name}`)
+          return null
+        }
+
+        console.log(`[Generate Summaries] Generating summary for ${project_name} with ${memories.length} memories`)
+
+        try {
+          const summary = await generateSummary(project_name, memories)
         
         // Upsert the summary
         const { error: upsertError } = await supabase
@@ -167,18 +201,21 @@ serve(async (req) => {
 
         if (upsertError) throw upsertError
 
-        return { project: project_name, status: 'updated' }
-      } catch (error) {
-        console.error(`[Generate Summaries] Error processing ${project_name}:`, error)
-        return { project: project_name, status: 'error', error: error.message }
+          return { project: project_name, status: 'updated' }
+        } catch (error) {
+          console.error(`[Generate Summaries] Error processing ${project_name}:`, error)
+          return { project: project_name, status: 'error', error: error.message }
+        }
+      } finally {
+        await memoriesSession.close()
       }
     })
 
-    const results = await Promise.all(summaryPromises)
-    const updated = results.filter(r => r?.status === 'updated').length
-    const errors = results.filter(r => r?.status === 'error').length
+      const results = await Promise.all(summaryPromises)
+      const updated = results.filter(r => r?.status === 'updated').length
+      const errors = results.filter(r => r?.status === 'error').length
 
-    return new Response(
+      return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Processed ${projectMap.size} projects: ${updated} updated, ${errors} errors`,
@@ -188,7 +225,11 @@ serve(async (req) => {
         headers: { 'Content-Type': 'application/json' },
         status: 200
       }
-    )
+      )
+    } finally {
+      await session.close()
+      await driver.close()
+    }
   } catch (error) {
     console.error('[Generate Summaries] Error:', error)
     return new Response(
