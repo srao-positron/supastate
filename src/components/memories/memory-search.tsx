@@ -25,7 +25,7 @@ interface MemorySearchProps {
 export function MemorySearch({ 
   onSearch, 
   onProjectFilterChange,
-  isSearching = false 
+  isSearching = false
 }: MemorySearchProps) {
   const [query, setQuery] = useState('')
   const [projects, setProjects] = useState<string[]>([])
@@ -49,9 +49,12 @@ export function MemorySearch({
   }, [])
 
   // Manual search handler
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback(async () => {
     const projectFilter = selectedProject === 'all' ? undefined : [selectedProject]
+    
+    // Always use Neo4j (through memoriesAPI)
     onSearch(query, projectFilter, useSemanticSearch)
+    
     if (onProjectFilterChange && projectFilter) {
       onProjectFilterChange(projectFilter)
     }
@@ -153,31 +156,34 @@ export function MemorySearch({
             )}
           </div>
           
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="semantic-search"
-                checked={useSemanticSearch}
-                onCheckedChange={setUseSemanticSearch}
-              />
-              <Label 
-                htmlFor="semantic-search" 
-                className="cursor-pointer flex items-center gap-2"
-              >
-                <Sparkles className="h-4 w-4" />
-                Semantic Search
-                <span className="text-xs text-muted-foreground">
-                  (AI-powered search that understands meaning)
-                </span>
-              </Label>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="semantic-search"
+                  checked={useSemanticSearch}
+                  onCheckedChange={setUseSemanticSearch}
+                />
+                <Label 
+                  htmlFor="semantic-search" 
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Semantic Search
+                  <span className="text-xs text-muted-foreground">
+                    (AI-powered search that understands meaning)
+                  </span>
+                </Label>
+              </div>
             </div>
+            
           </div>
         </div>
       )}
 
       {isSearching && (
         <div className="text-sm text-muted-foreground text-center py-2">
-          Searching memories...
+          Searching knowledge graph...
         </div>
       )}
     </div>

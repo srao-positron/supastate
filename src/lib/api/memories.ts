@@ -75,68 +75,59 @@ export class MemoriesAPI {
   }
 
   async searchMemories(params: MemorySearchParams): Promise<MemorySearchResponse> {
-    const { query, projectFilter, limit = 20, offset = 0, useSemanticSearch = false } = params
+    const { query, projectFilter, limit = 20, offset = 0 } = params
 
-    // If semantic search is enabled and we have a query, use the semantic search endpoint
-    if (useSemanticSearch && query && query.trim()) {
-      return this.semanticSearch(params)
-    }
-
+    // Always use Neo4j for search
     try {
-      const { teamId, userId } = await this.getWorkspaceInfo()
-      if (!teamId && !userId) throw new Error('Not authenticated')
+      const { data: { session } } = await this.supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
 
-      let queryBuilder = this.supabase
-        .from('memories')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1)
-      
-      // Filter by workspace (team or personal)
-      // If user is part of a team, show both team memories AND their personal memories
-      if (teamId) {
-        // Show memories where:
-        // 1. team_id matches the user's team OR
-        // 2. user_id matches and team_id is null (personal memories)
-        queryBuilder = queryBuilder.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
-      } else {
-        // User not in a team - only show their personal memories
-        queryBuilder = queryBuilder.eq('user_id', userId)
-      }
-
-      // Only apply text search if query is not empty
-      if (query && query.trim()) {
-        // Use ilike for pattern matching instead of textSearch
-        queryBuilder = queryBuilder.ilike('content', `%${query}%`)
-      }
-
-      if (projectFilter && projectFilter.length > 0) {
-        queryBuilder = queryBuilder.in('project_name', projectFilter)
-      }
-
-      const { data, error, count } = await queryBuilder
-
-      // Debug logging
-      console.log('[MemoriesAPI] searchMemories result:', {
-        teamId,
-        userId,
-        count,
-        error: error?.message,
-        errorDetails: error,
-        dataLength: data?.length,
-        query,
-        projectFilter
+      const response = await fetch('/api/neo4j/hybrid-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          query: query || null,
+          searchType: query ? 'hybrid' : 'graph',
+          filters: {
+            projectName: projectFilter?.[0],
+            onlyMyContent: false
+          },
+          limit,
+          offset
+        })
       })
 
-      if (error) {
-        console.error('[MemoriesAPI] Search error details:', error)
-        throw error
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Search failed')
       }
 
+      const data = await response.json()
+      
+      // Convert Neo4j results to Memory format
+      const memories: Memory[] = data.results.map((result: any) => ({
+        id: result.node?.id || result.key,
+        team_id: result.node?.team_id || 'default-team',
+        user_id: result.node?.user_id || null,
+        project_name: result.node?.project_name || 'Unknown Project',
+        chunk_id: result.node?.chunk_id || result.key,
+        content: result.content || result.node?.content || '',
+        metadata: {
+          ...result.metadata,
+          ...result.node?.metadata
+        },
+        created_at: result.node?.created_at || new Date().toISOString(),
+        updated_at: result.node?.updated_at || new Date().toISOString(),
+        similarity: result.score
+      }))
+
       return {
-        results: data || [],
-        total: count || 0,
-        hasMore: (count || 0) > offset + limit,
+        results: memories,
+        total: data.totalResults || memories.length,
+        hasMore: memories.length === limit
       }
     } catch (error) {
       console.error('Memory search error:', error)
@@ -298,59 +289,6 @@ export class MemoriesAPI {
         totalMemories: 0,
         projectCounts: {},
       }
-    }
-  }
-
-  private async semanticSearch(params: MemorySearchParams): Promise<MemorySearchResponse> {
-    const { query, projectFilter, limit = 20 } = params
-
-    console.log('[MemoriesAPI] semanticSearch called with:', {
-      query,
-      projectFilter,
-      limit
-    })
-
-    try {
-      const response = await fetch('/api/memories/semantic-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query,
-          projectFilter: projectFilter || null,  // Convert undefined to null
-          limit,
-          threshold: 0.7,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[MemoriesAPI] Semantic search failed:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        })
-        throw new Error(`Semantic search failed: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      
-      console.log('[MemoriesAPI] semanticSearch response:', {
-        resultsCount: data.results?.length || 0,
-        total: data.total,
-        firstResult: data.results?.[0]
-      })
-      
-      return {
-        results: data.results || [],
-        total: data.total || 0,
-        hasMore: data.hasMore || false,
-      }
-    } catch (error) {
-      console.error('Semantic search error:', error)
-      // Fall back to regular search
-      return this.searchMemories({ ...params, useSemanticSearch: false })
     }
   }
 }

@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createHash } from 'crypto'
 import Logger from '@/lib/logging/logger'
 import { getRequestId, sanitizeForLogging } from '@/lib/logging/request-id'
+import { ingestionService } from '@/lib/neo4j/ingestion'
 
 // Enhanced schema with rich metadata support
 const MemorySyncSchema = z.object({
@@ -152,84 +153,86 @@ export async function POST(request: NextRequest) {
       authenticatedTeamId = teamId
     }
     
-    authLogger.info('Starting chunk upsert', { totalChunks: chunks.length })
+    authLogger.info('Starting Neo4j ingestion', { totalChunks: chunks.length })
+    let neo4jSuccessCount = 0
+    let neo4jErrors = 0
     
-    // Prepare memory data
-    const memoryData = chunks.map(chunk => ({
-      team_id: authenticatedTeamId || undefined,
-      user_id: authenticatedTeamId ? undefined : authenticatedUserId || undefined,
-      project_name: projectName,
-      chunk_id: chunk.chunkId,
-      content: chunk.content,
-      embedding: chunk.embedding,
-      metadata: {
-        ...chunk.metadata,
-        messageType: chunk.messageType,
-        sessionId: body.sessionId,
-        conversationId: body.conversationId,
-        branchName: body.branchName,
-        commitSha: body.commitSha,
-        syncedAt: new Date().toISOString(),
-      },
-    }))
-    
-    // Batch upsert for better performance
-    const batchSize = 50 // Smaller batches for large embeddings
-    const results = []
-    
-    for (let i = 0; i < memoryData.length; i += batchSize) {
-      const batch = memoryData.slice(i, i + batchSize)
-      authLogger.debug('Processing batch', {
-        batchNumber: Math.floor(i / batchSize) + 1,
-        totalBatches: Math.ceil(memoryData.length / batchSize),
-        batchSize: batch.length
-      })
-      
-      const { data, error } = await supabase
-        .from('memories')
-        .upsert(batch, {
-          onConflict: 'workspace_id,chunk_id',
-          ignoreDuplicates: false,
+    try {
+      // Process chunks in parallel for Neo4j (with concurrency limit)
+      const neo4jPromises = chunks.map((chunk, index) => 
+        ingestionService.ingestMemory({
+          id: `${authenticatedTeamId || authenticatedUserId}-${chunk.chunkId}`,
+          content: chunk.content,
+          project_name: projectName,
+          user_id: authenticatedUserId || undefined,
+          team_id: authenticatedTeamId || undefined,
+          type: chunk.messageType === 'user' ? 'question' : chunk.messageType === 'assistant' ? 'answer' : 'general',
+          metadata: {
+            ...chunk.metadata,
+            messageType: chunk.messageType,
+            sessionId: body.sessionId,
+            conversationId: body.conversationId,
+            branchName: body.branchName,
+            commitSha: body.commitSha,
+          },
+          chunk_id: chunk.chunkId,
+          session_id: body.sessionId,
+          file_paths: chunk.metadata?.filePaths,
+          topics: chunk.metadata?.topics,
+          entities_mentioned: chunk.metadata?.entitiesMentioned,
+          tools_used: chunk.metadata?.toolsUsed,
+        }, {
+          useInferenceEngine: true, // Enable automatic relationship creation
+          inferEvolution: index > 0, // Check evolution for non-first chunks
+        }).then(() => {
+          neo4jSuccessCount++
+          return { success: true }
+        }).catch((error) => {
+          neo4jErrors++
+          authLogger.error('Neo4j ingestion failed for chunk', error, { chunkId: chunk.chunkId })
+          return { error }
         })
-        .select('id')
+      )
       
-      if (error) {
-        authLogger.error('Batch upsert failed', error, { batchIndex: i / batchSize })
-        results.push({ error })
-      } else {
-        authLogger.debug('Batch upsert successful', { recordsUpserted: data?.length || batch.length })
-        results.push({ success: true, count: data?.length || batch.length })
+      // Process with concurrency limit
+      const concurrencyLimit = 5
+      for (let i = 0; i < neo4jPromises.length; i += concurrencyLimit) {
+        await Promise.all(neo4jPromises.slice(i, i + concurrencyLimit))
       }
+      
+      authLogger.info('Neo4j ingestion completed', { 
+        success: neo4jSuccessCount, 
+        failed: neo4jErrors 
+      })
+    } catch (neo4jError) {
+      authLogger.error('Neo4j ingestion batch failed', neo4jError)
+      // Log error but continue - we'll return partial success
     }
-    
-    // Check for errors
-    const errors = results.filter(r => r.error).map(r => r.error)
-    const successCount = results.filter(r => r.success).reduce((sum, r) => sum + r.count, 0)
     
     const syncStatus = {
       workspace: authenticatedTeamId ? `team:${authenticatedTeamId}` : `user:${authenticatedUserId}`,
       project_name: projectName,
       sync_type: 'memory',
-      status: errors.length > 0 ? 'partial' : 'completed',
-      chunks_synced: successCount,
-      chunks_failed: errors.length,
+      status: neo4jErrors > 0 ? 'partial' : 'completed',
+      chunks_synced: neo4jSuccessCount,
+      chunks_failed: neo4jErrors,
       duration_ms: Date.now() - new Date().getTime(),
     }
     
     authLogger.info('Sync completed', syncStatus)
     
-    if (errors.length > 0 && successCount === 0) {
+    if (neo4jErrors > 0 && neo4jSuccessCount === 0) {
       return NextResponse.json({ 
         error: 'Failed to sync all chunks', 
         requestId,
-        details: process.env.NODE_ENV === 'development' ? errors : undefined 
+        details: process.env.NODE_ENV === 'development' ? 'Neo4j ingestion failed' : undefined 
       }, { status: 500 })
     }
     
     return NextResponse.json({ 
       success: true, 
-      synced: successCount,
-      failed: errors.length,
+      synced: neo4jSuccessCount,
+      failed: neo4jErrors,
       workspace: authenticatedTeamId ? 'team' : 'personal'
     })
   } catch (error) {
