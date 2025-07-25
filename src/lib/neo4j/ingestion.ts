@@ -187,7 +187,8 @@ export class IngestionService {
   private async createMemoryNode(data: Partial<MemoryNode> & { 
     id: string, 
     content: string, 
-    embedding: number[] 
+    embedding: number[],
+    chunk_id?: string
   }): Promise<MemoryNode> {
     const query = `
       MERGE (m:Memory {id: $id})
@@ -198,6 +199,7 @@ export class IngestionService {
         m.user_id = $user_id,
         m.team_id = $team_id,
         m.type = $type,
+        m.chunk_id = $chunk_id,
         m.created_at = $created_at,
         m.updated_at = $updated_at,
         m.metadata = $metadata
@@ -208,6 +210,7 @@ export class IngestionService {
         m.user_id = $user_id,
         m.team_id = $team_id,
         m.type = $type,
+        m.chunk_id = $chunk_id,
         m.updated_at = $updated_at,
         m.metadata = $metadata
       RETURN m
@@ -221,6 +224,7 @@ export class IngestionService {
       user_id: data.user_id || null,
       team_id: data.team_id || null,
       type: data.type || 'general',
+      chunk_id: data.chunk_id || null,
       created_at: data.created_at,
       updated_at: data.updated_at,
       metadata: JSON.stringify(data.metadata || {})
@@ -239,21 +243,22 @@ export class IngestionService {
       throw new Error('Failed to create memory node')
     }
     
-    // Properly extract the node properties from the Neo4j result
+    // Extract the node properties from the Neo4j result
     const record = result.records[0]
     const node = record.m
     
     return {
-      id: node.properties.id,
-      content: node.properties.content,
-      embedding: node.properties.embedding,
-      project_name: node.properties.project_name,
-      user_id: node.properties.user_id,
-      team_id: node.properties.team_id,
-      type: node.properties.type,
-      created_at: node.properties.created_at,
-      updated_at: node.properties.updated_at,
-      metadata: node.properties.metadata ? JSON.parse(node.properties.metadata) : {}
+      id: node.id,
+      content: node.content,
+      embedding: node.embedding,
+      project_name: node.project_name,
+      user_id: node.user_id,
+      team_id: node.team_id,
+      type: node.type,
+      chunk_id: node.chunk_id,
+      created_at: node.created_at,
+      updated_at: node.updated_at,
+      metadata: node.metadata ? JSON.parse(node.metadata) : {}
     } as MemoryNode
   }
 

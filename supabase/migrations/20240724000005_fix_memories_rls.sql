@@ -62,18 +62,4 @@ CREATE POLICY "memories_delete_policy" ON memories
 -- Ensure RLS is enabled
 ALTER TABLE memories ENABLE ROW LEVEL SECURITY;
 
--- Also fix project_summaries RLS if it doesn't exist
-DROP POLICY IF EXISTS "project_summaries_select" ON project_summaries;
-
-CREATE POLICY "project_summaries_select_policy" ON project_summaries
-    FOR SELECT
-    USING (
-        -- Personal summaries
-        workspace_id = auth.uid()
-        OR
-        -- Team summaries where user is a member
-        is_team_member(workspace_id, auth.uid())
-    );
-
--- Enable RLS on project_summaries
-ALTER TABLE project_summaries ENABLE ROW LEVEL SECURITY;
+-- Note: project_summaries table was removed in favor of using memories and conversations tables
