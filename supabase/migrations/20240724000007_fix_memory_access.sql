@@ -67,18 +67,4 @@ CREATE POLICY "memories_delete_policy_v2" ON memories
         ))
     );
 
--- Also check if project_summaries policies need updating
-DROP POLICY IF EXISTS "project_summaries_select_policy" ON project_summaries;
-CREATE POLICY "project_summaries_select_policy_v2" ON project_summaries
-    FOR SELECT
-    USING (
-        -- User can see their own summaries
-        workspace_id = auth.uid()
-        OR
-        -- User can see team summaries if they're a member
-        EXISTS (
-            SELECT 1 FROM team_members
-            WHERE team_members.team_id = workspace_id
-            AND team_members.user_id = auth.uid()
-        )
-    );
+-- Note: project_summaries table was removed in favor of using memories and conversations tables
