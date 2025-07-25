@@ -70,7 +70,7 @@ export function MemoryCard({
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
-                <span className="font-mono">{memory.chunk_id.slice(0, 8)}</span>
+                <span className="font-mono">{memory.chunk_id?.slice(0, 8) || memory.id?.slice(0, 8) || 'unknown'}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />

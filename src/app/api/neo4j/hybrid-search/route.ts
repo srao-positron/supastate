@@ -256,6 +256,12 @@ async function enrichResults(results: any[]): Promise<any[]> {
       key: node.id,
       content: node.content,
       metadata: node.metadata,
+      // Pass through the entire node object to preserve all fields
+      node: {
+        ...node,
+        // Ensure metadata is parsed if it's a string
+        metadata: typeof node.metadata === 'string' ? JSON.parse(node.metadata) : node.metadata
+      },
       // Include relationship info if available
       relatedNodes: result.relationships?.map((r: any) => ({
         id: r.id,

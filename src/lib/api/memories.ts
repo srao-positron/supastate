@@ -122,7 +122,7 @@ export class MemoriesAPI {
         team_id: result.node?.team_id || 'default-team',
         user_id: result.node?.user_id || null,
         project_name: result.node?.project_name || 'Unknown Project',
-        chunk_id: result.node?.chunk_id || result.key,
+        chunk_id: result.node?.chunk_id || result.key || result.node?.id || '',
         content: result.content || result.node?.content || '',
         metadata: {
           ...result.metadata,
