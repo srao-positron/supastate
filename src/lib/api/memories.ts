@@ -90,7 +90,7 @@ export class MemoriesAPI {
         },
         body: JSON.stringify({
           query: query || null,
-          searchType: query ? 'hybrid' : 'graph',
+          searchType: 'hybrid', // Always use hybrid for now
           filters: {
             projectName: projectFilter?.[0],
             onlyMyContent: false

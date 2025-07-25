@@ -53,6 +53,15 @@ export async function POST(request: NextRequest) {
       limit = 30
     } = body
 
+    log.info('Hybrid search request', {
+      service: 'HybridSearch',
+      hasQuery: !!query,
+      searchType,
+      filters,
+      limit,
+      userId: user.id
+    })
+
     let results: any[] = []
 
     // Generate embedding for vector search if query provided
@@ -117,6 +126,16 @@ export async function POST(request: NextRequest) {
           break
 
         case 'hybrid':
+          // If no query and no embedding, just return empty results for initial load
+          if (!embedding) {
+            log.info('No query provided, returning empty results', {
+              service: 'HybridSearch',
+              searchType: 'hybrid'
+            })
+            results = []
+            break
+          }
+          
           // Combine vector similarity with graph relationships
           const hybridResults = await neo4jService.hybridSearch({
             embedding,
