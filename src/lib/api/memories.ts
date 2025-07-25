@@ -117,21 +117,27 @@ export class MemoriesAPI {
       }
       
       // Convert Neo4j results to Memory format
-      const memories: Memory[] = data.results.map((result: any) => ({
-        id: result.node?.id || result.key,
-        team_id: result.node?.team_id || 'default-team',
-        user_id: result.node?.user_id || null,
-        project_name: result.node?.project_name || 'Unknown Project',
-        chunk_id: result.node?.chunk_id || result.key || result.node?.id || '',
-        content: result.content || result.node?.content || '',
-        metadata: {
-          ...result.metadata,
-          ...result.node?.metadata
-        },
-        created_at: result.node?.created_at || new Date().toISOString(),
-        updated_at: result.node?.updated_at || new Date().toISOString(),
-        similarity: result.score
-      }))
+      const memories: Memory[] = data.results.map((result: any) => {
+        // Handle both direct properties and nested properties structure
+        const node = result.node || {}
+        const props = node.properties || node
+        
+        return {
+          id: props.id || result.key,
+          team_id: props.team_id || 'default-team',
+          user_id: props.user_id || null,
+          project_name: props.project_name || 'Unknown Project',
+          chunk_id: props.chunk_id || result.key || props.id || '',
+          content: result.content || props.content || '',
+          metadata: {
+            ...result.metadata,
+            ...props.metadata
+          },
+          created_at: props.created_at || new Date().toISOString(),
+          updated_at: props.updated_at || new Date().toISOString(),
+          similarity: result.score
+        }
+      })
 
       return {
         results: memories,

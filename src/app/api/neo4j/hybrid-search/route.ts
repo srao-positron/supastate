@@ -146,11 +146,15 @@ export async function POST(request: NextRequest) {
               projectName: filters.projectName
             })
             
-            results = recentMemories.records.map((record: any) => ({
-              node: record.node,
-              score: record.score,
-              nodeType: 'Memory'
-            }))
+            results = recentMemories.records.map((record: any) => {
+              // Handle Neo4j node structure - properties are in node.properties
+              const nodeData = record.node?.properties || record.node
+              return {
+                node: nodeData,
+                score: record.score,
+                nodeType: 'Memory'
+              }
+            })
             break
           }
           
