@@ -52,4 +52,3 @@ supabase-config
 docs/vercel-env-vars.txt
 dev-server.log
 dev.log
-neo4j
