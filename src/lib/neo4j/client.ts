@@ -1,4 +1,5 @@
 import neo4j, { Driver, Session, ManagedTransaction } from 'neo4j-driver'
+import { log } from '@/lib/logger'
 
 // Create a singleton driver instance
 let driver: Driver | null = null
@@ -25,7 +26,7 @@ export function getDriver(): Driver {
           level: 'info',
           logger: (level, message) => {
             if (process.env.NODE_ENV === 'development') {
-              console.log(`[Neo4j ${level}]`, message)
+              log.info(`[Neo4j ${level}] ${message}`)
             }
           }
         }
@@ -77,17 +78,20 @@ export async function executeQuery<T = any>(
   const driver = getDriver()
   
   try {
-    console.log('[Neo4j Query]:', query.substring(0, 100) + '...')
-    console.log('[Neo4j Params]:', parameters ? Object.keys(parameters) : 'none')
+    log.debug('Executing Neo4j query', {
+      query: query.substring(0, 100) + '...',
+      params: parameters ? Object.keys(parameters) : 'none'
+    })
     const result = await driver.executeQuery(query, parameters || {}, { database })
     return {
       records: result.records.map(record => record.toObject()),
       summary: result.summary
     }
   } catch (error) {
-    console.error('Neo4j query error:', error)
-    console.error('Failed query:', query)
-    console.error('Failed params:', parameters)
+    log.error('Neo4j query error', error, {
+      query,
+      parameters
+    })
     throw error
   }
 }
@@ -99,12 +103,12 @@ export async function verifyConnectivity(): Promise<void> {
   try {
     await driver.verifyConnectivity()
     const serverInfo = await driver.getServerInfo()
-    console.log('Connected to Neo4j:', {
+    log.info('Connected to Neo4j', {
       address: serverInfo.address,
       version: serverInfo.protocolVersion,
     })
   } catch (error) {
-    console.error('Failed to connect to Neo4j:', error)
+    log.error('Failed to connect to Neo4j', error)
     throw error
   }
 }
@@ -119,13 +123,13 @@ export async function closeDriver(): Promise<void> {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('Closing Neo4j connection...')
+  log.info('Closing Neo4j connection...')
   await closeDriver()
   process.exit(0)
 })
 
 process.on('SIGTERM', async () => {
-  console.log('Closing Neo4j connection...')
+  log.info('Closing Neo4j connection...')
   await closeDriver()
   process.exit(0)
 })

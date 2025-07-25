@@ -5,6 +5,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createApiKey } from '@/lib/auth/api-key'
 import { NextResponse } from 'next/server'
+import { log } from '@/lib/logger'
 
 export async function POST(request: Request) {
   try {
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     })
     
   } catch (error) {
-    console.error('[Create API Key] Error:', error)
+    log.error('Create API key error', error)
     return NextResponse.json(
       { error: 'Failed to create API key' },
       { status: 500 }

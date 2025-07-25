@@ -15,6 +15,7 @@ import {
   SearchResult,
   KnowledgeGraph
 } from './types'
+import { log } from '@/lib/logger'
 
 export class Neo4jService {
   private initialized = false
@@ -28,9 +29,9 @@ export class Neo4jService {
     try {
       await verifyConnectivity()
       this.initialized = true
-      console.log('Neo4j service initialized')
+      log.info('Neo4j service initialized')
     } catch (error) {
-      console.error('Neo4j initialization failed:', error)
+      log.error('Neo4j initialization failed', error)
       // Reset flag so we can retry
       this.initialized = false
       throw error
@@ -93,7 +94,10 @@ export class Neo4jService {
         }
       })
     } catch (error) {
-      console.error('[Neo4j] Vector search error:', error)
+      log.error('Neo4j vector search error', error, {
+        operation: 'searchMemoriesByVector',
+        filters: { projectFilter, userFilter, teamFilter }
+      })
       // Return empty results if index doesn't exist or other errors
       return []
     }
@@ -144,7 +148,10 @@ export class Neo4jService {
         }
       })
     } catch (error) {
-      console.error('[Neo4j] Code vector search error:', error)
+      log.error('Neo4j code vector search error', error, {
+        operation: 'searchCodeByVector',
+        projectFilter
+      })
       // Return empty results if index doesn't exist or other errors
       return []
     }
@@ -258,7 +265,11 @@ export class Neo4jService {
         relationships: record.relatedNodes
       }))
     } catch (error) {
-      console.error('[Neo4j] Hybrid search error:', error)
+      log.error('Neo4j hybrid search error', error, {
+        operation: 'hybridSearch',
+        hasEmbedding: !!embedding,
+        filters
+      })
       // Return empty results if there's an error
       return []
     }

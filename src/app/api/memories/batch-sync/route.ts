@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { createHash } from 'crypto'
+import { log } from '@/lib/logger'
 
 // Schema for batch sync - supports larger payloads
 const BatchMemorySyncSchema = z.object({
@@ -42,7 +43,7 @@ const BatchMemorySyncSchema = z.object({
  * - Returns detailed progress information
  */
 export async function POST(request: NextRequest) {
-  console.log('[Batch Memory Sync] Starting batch sync request')
+  log.info('Starting batch memory sync request')
   
   try {
     // Check authentication
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     
     // Handle API key authentication
     if (apiKey) {
-      console.log('[Batch Memory Sync] Authenticating with API key')
+      log.debug('Authenticating with API key')
       
       const serviceClient = await createServiceClient()
       const keyHash = createHash('sha256').update(apiKey).digest('hex')
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (apiKeyError || !apiKeyData) {
-        console.error('[Batch Memory Sync] API key validation error:', apiKeyError)
+        log.error('API key validation error', apiKeyError)
         return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
       }
       
@@ -90,20 +91,20 @@ export async function POST(request: NextRequest) {
     } 
     // Handle session authentication
     else if (authorization?.startsWith('Bearer ')) {
-      console.log('[Batch Memory Sync] Authenticating with session')
+      log.debug('Authenticating with session')
       
       supabase = await createClient()
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
       if (userError || !user) {
-        console.error('[Batch Memory Sync] Session validation error:', userError)
+        log.error('Session validation error', userError)
         return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
       }
       
       authenticatedUserId = user.id
     } 
     else {
-      console.error('[Batch Memory Sync] No authentication provided')
+      log.warn('No authentication provided')
       return NextResponse.json({ error: 'Missing authentication' }, { status: 401 })
     }
     
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { teamId, projectName, chunks, batchMetadata } = BatchMemorySyncSchema.parse(body)
     
-    console.log('[Batch Memory Sync] Request:', { 
+    log.info('Processing batch sync request', { 
       teamId, 
       projectName, 
       chunkCount: chunks.length,
@@ -128,14 +129,14 @@ export async function POST(request: NextRequest) {
         .single()
       
       if (!memberData) {
-        console.error('[Batch Memory Sync] User not member of specified team')
+        log.warn('User not member of specified team', { userId: authenticatedUserId, teamId })
         return NextResponse.json({ error: 'Access denied to team' }, { status: 403 })
       }
       
       authenticatedTeamId = teamId
     }
     
-    console.log(`[Batch Memory Sync] Processing ${chunks.length} chunks`)
+    log.info('Processing memory chunks', { count: chunks.length })
     
     // Prepare memory data with enhanced metadata
     const memoryData = chunks.map(chunk => ({
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
       const batchNumber = Math.floor(i / batchSize) + 1
       const totalBatches = Math.ceil(memoryData.length / batchSize)
       
-      console.log(`[Batch Memory Sync] Processing batch ${batchNumber}/${totalBatches}`)
+      log.debug('Processing batch', { batchNumber, totalBatches })
       
       const { data, error } = await supabase
         .from('memories')
@@ -177,7 +178,7 @@ export async function POST(request: NextRequest) {
         .select('id')
       
       if (error) {
-        console.error(`[Batch Memory Sync] Batch ${batchNumber} error:`, error)
+        log.error('Batch processing error', error, { batchNumber })
         results.push({ 
           batch: batchNumber, 
           error: error.message,
@@ -185,7 +186,10 @@ export async function POST(request: NextRequest) {
           failed: batch.length
         })
       } else {
-        console.log(`[Batch Memory Sync] Batch ${batchNumber} success: ${data?.length || 0} records`)
+        log.debug('Batch processed successfully', { 
+          batchNumber, 
+          recordsProcessed: data?.length || 0 
+        })
         results.push({ 
           batch: batchNumber, 
           success: true, 
@@ -204,7 +208,13 @@ export async function POST(request: NextRequest) {
     const successfulBatches = results.filter(r => r.success).length
     const failedBatches = results.filter(r => r.error).length
     
-    console.log(`[Batch Memory Sync] Completed in ${duration}ms. Processed: ${totalProcessed}, Failed: ${totalFailed}`)
+    log.info('Batch sync completed', {
+      durationMs: duration,
+      totalProcessed,
+      totalFailed,
+      successfulBatches,
+      failedBatches
+    })
     
     // Log sync status
     await supabase.from('sync_logs').insert({
@@ -247,14 +257,14 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Batch Memory Sync] Validation error:', error.errors)
+      log.warn('Request validation error', { errors: error.errors })
       return NextResponse.json({ 
         error: 'Invalid request data',
         details: error.errors
       }, { status: 400 })
     }
     
-    console.error('[Batch Memory Sync] Unexpected error:', error)
+    log.error('Unexpected error in batch sync', error)
     return NextResponse.json({ 
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -290,7 +300,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
     
     if (error) {
-      console.error('[Batch Memory Sync] Progress check error:', error)
+      log.error('Progress check error', error)
       return NextResponse.json({ error: 'Failed to get progress' }, { status: 500 })
     }
     

@@ -4,6 +4,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { createHash, randomBytes } from 'crypto'
+import { log } from '@/lib/logger'
 
 export interface AuthResult {
   authenticated: boolean
@@ -49,7 +50,7 @@ export async function verifyApiKey(apiKey: string): Promise<AuthResult> {
       teamId: data.team_id
     }
   } catch (error) {
-    console.error('API key verification error:', error)
+    log.error('API key verification error', error)
     return {
       authenticated: false,
       error: 'Authentication failed'
@@ -89,7 +90,7 @@ export async function createApiKey(
     // Return the unhashed key (only shown once)
     return { apiKey }
   } catch (error) {
-    console.error('API key creation error:', error)
+    log.error('API key creation error', error)
     return { error: 'Failed to create API key' }
   }
 }

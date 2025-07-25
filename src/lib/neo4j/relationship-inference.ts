@@ -1,6 +1,7 @@
 import { executeQuery, writeTransaction } from './client'
 import { neo4jService } from './service'
 import OpenAI from 'openai'
+import { log } from '@/lib/logger'
 
 export interface InferenceResult {
   relationshipsCreated: number
@@ -31,7 +32,7 @@ export class RelationshipInferenceEngine {
    * Infer relationships between a memory and existing code entities
    */
   async inferMemoryCodeRelationships(memoryId: string): Promise<InferenceResult> {
-    console.log(`[InferenceEngine] Analyzing memory ${memoryId} for code relationships`)
+    log.debug('Analyzing memory for code relationships', { memoryId })
     
     // Get the memory content
     const memoryResult = await executeQuery(`
@@ -111,7 +112,11 @@ export class RelationshipInferenceEngine {
       suggestedRelationships.push(...llmSuggestions)
     }
     
-    console.log(`[InferenceEngine] Created ${relationshipsCreated} relationships, suggested ${suggestedRelationships.length}`)
+    log.info('Memory code relationship inference completed', {
+      memoryId,
+      relationshipsCreated,
+      suggestedCount: suggestedRelationships.length
+    })
     
     return {
       relationshipsCreated,
@@ -123,7 +128,7 @@ export class RelationshipInferenceEngine {
    * Infer relationships between memories (knowledge evolution)
    */
   async inferMemoryEvolution(memoryId: string): Promise<InferenceResult> {
-    console.log(`[InferenceEngine] Analyzing memory ${memoryId} for evolution patterns`)
+    log.debug('Analyzing memory for evolution patterns', { memoryId })
     
     const result = await executeQuery(`
       MATCH (current:Memory {id: $memoryId})
@@ -340,7 +345,7 @@ export class RelationshipInferenceEngine {
       
       return relationships
     } catch (error) {
-      console.error('[InferenceEngine] LLM analysis failed:', error)
+      log.error('LLM analysis failed in inference engine', error)
       return []
     }
   }
@@ -451,7 +456,7 @@ export class RelationshipInferenceEngine {
     totalSuggested: number
     results: Array<{ memoryId: string; result: InferenceResult }>
   }> {
-    console.log(`[InferenceEngine] Batch processing ${memoryIds.length} memories`)
+    log.info('Starting batch inference processing', { memoryCount: memoryIds.length })
     
     const results: Array<{ memoryId: string; result: InferenceResult }> = []
     let totalCreated = 0
@@ -480,7 +485,7 @@ export class RelationshipInferenceEngine {
         totalSuggested += combinedResult.suggestedRelationships.length
         
       } catch (error) {
-        console.error(`[InferenceEngine] Failed to process memory ${memoryId}:`, error)
+        log.error('Failed to process memory in batch inference', error, { memoryId })
         results.push({ 
           memoryId, 
           result: { relationshipsCreated: 0, suggestedRelationships: [] } 
@@ -488,7 +493,11 @@ export class RelationshipInferenceEngine {
       }
     }
     
-    console.log(`[InferenceEngine] Batch complete: ${totalCreated} created, ${totalSuggested} suggested`)
+    log.info('Batch inference processing completed', {
+      totalCreated,
+      totalSuggested,
+      memoryCount: memoryIds.length
+    })
     
     return {
       totalCreated,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { ingestionService } from '@/lib/neo4j/ingestion'
+import { log } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,7 +62,11 @@ export async function POST(request: NextRequest) {
       chunk_id: body.chunk_id
     })
 
-    console.log(`[API] Memory ingested: ${memory.id}`)
+    log.info('Memory ingested via API', {
+      memoryId: memory.id,
+      projectName: memory.project_name,
+      userId: user.id
+    })
 
     return NextResponse.json({
       success: true,
@@ -73,7 +78,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[API] Memory ingestion error:', error)
+    log.error('Memory ingestion API error', error)
     return NextResponse.json(
       { error: 'Failed to ingest memory' }, 
       { status: 500 }
@@ -134,7 +139,10 @@ export async function PUT(request: NextRequest) {
             })
             results.push({ success: true, id: result.id })
           } catch (error) {
-            console.error(`[API] Failed to ingest memory:`, error)
+            log.error('Failed to ingest memory in batch', error, {
+              memoryIndex: i + batch.indexOf(memory),
+              userId: memory.user_id || user.id
+            })
             results.push({ success: false, error: String(error) })
           }
         })
@@ -142,7 +150,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const successCount = results.filter(r => r.success).length
-    console.log(`[API] Batch ingestion complete: ${successCount}/${memories.length} successful`)
+    log.info('Batch ingestion complete', {
+      total: memories.length,
+      successful: successCount,
+      failed: memories.length - successCount
+    })
 
     return NextResponse.json({
       success: true,
@@ -153,7 +165,7 @@ export async function PUT(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[API] Batch ingestion error:', error)
+    log.error('Batch ingestion API error', error)
     return NextResponse.json(
       { error: 'Failed to ingest memories' }, 
       { status: 500 }

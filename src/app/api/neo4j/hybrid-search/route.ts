@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { neo4jService } from '@/lib/neo4j/service'
 import OpenAI from 'openai'
+import { log } from '@/lib/logger'
 
 // Initialize OpenAI for generating embeddings
 let openai: OpenAI | null = null
@@ -31,8 +32,11 @@ export async function POST(request: NextRequest) {
     try {
       await neo4jService.initialize()
     } catch (initError) {
-      console.error('[HybridSearch] Failed to initialize Neo4j:', initError)
       const errorMessage = initError instanceof Error ? initError.message : 'Unknown error'
+      log.error('Failed to initialize Neo4j', initError, {
+        service: 'HybridSearch',
+        endpoint: 'POST'
+      })
       return NextResponse.json({
         error: 'Failed to connect to Neo4j database',
         details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
@@ -144,7 +148,11 @@ export async function POST(request: NextRequest) {
           )
       }
     } catch (searchError) {
-      console.error(`[HybridSearch] ${searchType} search error:`, searchError)
+      log.error(`${searchType} search error`, searchError, {
+        service: 'HybridSearch',
+        searchType,
+        endpoint: 'POST'
+      })
       // If it's a Neo4j connection error or empty result, handle gracefully
       results = []
     }
@@ -153,10 +161,14 @@ export async function POST(request: NextRequest) {
     const enrichedResults = await enrichResults(results.slice(0, 10))
 
     // Log search for analytics
-    console.log(`[HybridSearch] User ${user.id} performed ${searchType} search:`, {
+    log.info(`User performed ${searchType} search`, {
+      service: 'HybridSearch',
+      userId: user.id,
+      searchType,
       query: query?.substring(0, 50),
       filters,
-      resultCount: results.length
+      resultCount: results.length,
+      endpoint: 'POST'
     })
 
     return NextResponse.json({
@@ -169,7 +181,10 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[HybridSearch] Error:', error)
+    log.error('HybridSearch endpoint error', error, {
+      service: 'HybridSearch',
+      endpoint: 'POST'
+    })
     return NextResponse.json(
       { error: 'Search failed' }, 
       { status: 500 }
@@ -229,7 +244,10 @@ export async function GET(request: NextRequest) {
     try {
       await neo4jService.initialize()
     } catch (initError) {
-      console.error('[HybridSearch GET] Failed to initialize Neo4j:', initError)
+      log.error('Failed to initialize Neo4j', initError, {
+        service: 'HybridSearch',
+        endpoint: 'GET'
+      })
       // Return empty suggestions instead of error
       return NextResponse.json({
         suggestions: {
@@ -303,7 +321,10 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('[HybridSearch] Suggestions error:', error)
+    log.error('Failed to get suggestions', error, {
+      service: 'HybridSearch',
+      endpoint: 'GET'
+    })
     return NextResponse.json(
       { error: 'Failed to get suggestions' }, 
       { status: 500 }

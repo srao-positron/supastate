@@ -3,6 +3,7 @@ import { executeQuery, writeTransaction } from './client'
 import { MemoryNode, CodeEntityNode, MemoryRelationType } from './types'
 import { neo4jService } from './service'
 import { relationshipInferenceEngine } from './relationship-inference'
+import { log } from '@/lib/logger'
 
 export class IngestionService {
   private openai: OpenAI | null = null
@@ -38,7 +39,12 @@ export class IngestionService {
     useInferenceEngine?: boolean
     inferEvolution?: boolean
   } = {}): Promise<MemoryNode> {
-    console.log(`[Ingestion] Processing memory for project: ${memory.project_name}`)
+    log.info('Processing memory for ingestion', {
+      projectName: memory.project_name,
+      hasUserId: !!memory.user_id,
+      hasTeamId: !!memory.team_id,
+      type: memory.type
+    })
     
     // 1. Generate embedding for the memory content
     const embedding = await this.generateEmbedding(memory.content)
@@ -66,22 +72,28 @@ export class IngestionService {
     
     // 6. Use inference engine if enabled
     if (options.useInferenceEngine) {
-      console.log(`[Ingestion] Running relationship inference for memory ${memoryNode.id}`)
+      log.debug('Running relationship inference', { memoryId: memoryNode.id })
       try {
         const inferenceResult = await relationshipInferenceEngine.inferMemoryCodeRelationships(memoryNode.id)
-        console.log(`[Ingestion] Inference created ${inferenceResult.relationshipsCreated} relationships`)
+        log.info('Relationship inference completed', {
+          memoryId: memoryNode.id,
+          relationshipsCreated: inferenceResult.relationshipsCreated
+        })
         
         if (options.inferEvolution) {
           const evolutionResult = await relationshipInferenceEngine.inferMemoryEvolution(memoryNode.id)
-          console.log(`[Ingestion] Evolution inference created ${evolutionResult.relationshipsCreated} relationships`)
+          log.info('Evolution inference completed', {
+            memoryId: memoryNode.id,
+            relationshipsCreated: evolutionResult.relationshipsCreated
+          })
         }
       } catch (error) {
-        console.error('[Ingestion] Relationship inference failed:', error)
+        log.error('Relationship inference failed', error, { memoryId: memoryNode.id })
         // Don't fail the whole ingestion if inference fails
       }
     }
     
-    console.log(`[Ingestion] Memory ${memoryNode.id} ingested successfully`)
+    log.info('Memory ingested successfully', { memoryId: memoryNode.id })
     return memoryNode
   }
 
@@ -107,7 +119,10 @@ export class IngestionService {
     useInferenceEngine?: boolean
     inferEvolution?: boolean
   } = {}): Promise<MemoryNode> {
-    console.log(`[Ingestion] Processing memory with embedding for project: ${memory.project_name}`)
+    log.info('Processing memory with pre-computed embedding', {
+      projectName: memory.project_name,
+      embeddingSize: memory.embedding.length
+    })
     
     // 1. Create memory node in Neo4j with provided embedding
     const memoryNode = await this.createMemoryNode({
@@ -139,12 +154,12 @@ export class IngestionService {
           await relationshipInferenceEngine.inferMemoryEvolution(memoryNode.id)
         }
       } catch (error) {
-        console.error('[Ingestion] Relationship inference failed:', error)
+        log.error('Relationship inference failed', error, { memoryId: memoryNode.id })
         // Don't fail the whole ingestion if inference fails
       }
     }
     
-    console.log(`[Ingestion] Memory ${memoryNode.id} ingested successfully with pre-computed embedding`)
+    log.info('Memory with pre-computed embedding ingested successfully', { memoryId: memoryNode.id })
     return memoryNode
   }
 
@@ -161,7 +176,7 @@ export class IngestionService {
       })
       return response.data[0].embedding
     } catch (error) {
-      console.error('[Ingestion] Embedding generation failed:', error)
+      log.error('Embedding generation failed', error)
       throw error
     }
   }
@@ -211,10 +226,11 @@ export class IngestionService {
       metadata: JSON.stringify(data.metadata || {})
     }
 
-    console.log('[Ingestion] Creating memory node with params:', {
-      ...params,
-      embedding: `[${params.embedding.length} dimensions]`,
-      content: params.content.substring(0, 50) + '...'
+    log.debug('Creating memory node', {
+      id: params.id,
+      projectName: params.project_name,
+      embeddingDimensions: params.embedding.length,
+      contentPreview: params.content.substring(0, 50) + '...'
     })
 
     const result = await executeQuery(query, params)
@@ -291,9 +307,11 @@ export class IngestionService {
         created_at: memory.created_at
       })
       
-      console.log(`[Ingestion] Created ${result.records[0]?.relationships_created || 0} PRECEDED_BY relationships`)
+      log.debug('Created PRECEDED_BY relationships', {
+        count: result.records[0]?.relationships_created || 0
+      })
     } catch (error) {
-      console.error('[Ingestion] Error creating PRECEDED_BY relationships:', error)
+      log.error('Error creating PRECEDED_BY relationships', error)
       // Don't fail the whole ingestion if this fails
     }
   }
@@ -490,17 +508,20 @@ export class IngestionService {
    * Batch ingest memories
    */
   async batchIngestMemories(memories: Array<Parameters<typeof this.ingestMemory>[0]>): Promise<void> {
-    console.log(`[Ingestion] Starting batch ingestion of ${memories.length} memories`)
+    log.info('Starting batch memory ingestion', { totalMemories: memories.length })
     
     for (const memory of memories) {
       try {
         await this.ingestMemory(memory)
       } catch (error) {
-        console.error(`[Ingestion] Failed to ingest memory:`, error)
+        log.error('Failed to ingest memory in batch', error, {
+          memoryIndex: memories.indexOf(memory),
+          projectName: memory.project_name
+        })
       }
     }
     
-    console.log(`[Ingestion] Batch ingestion complete`)
+    log.info('Batch memory ingestion completed')
   }
 }
 
