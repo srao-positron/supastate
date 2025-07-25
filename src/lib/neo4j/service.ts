@@ -56,7 +56,7 @@ export class Neo4jService {
 
     try {
       const query = `
-        CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
+        CALL db.index.vector.queryNodes('memory_embeddings', ${limit}, $embedding)
         YIELD node as memory, score
         WHERE score > $threshold
           ${projectFilter ? 'AND memory.project_name = $projectFilter' : ''}
@@ -68,7 +68,6 @@ export class Neo4jService {
 
       const result = await executeQuery(query, {
         embedding,
-        limit,
         threshold,
         projectFilter,
         userFilter,
@@ -111,7 +110,7 @@ export class Neo4jService {
 
     try {
       const query = `
-        CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
+        CALL db.index.vector.queryNodes('code_embeddings', ${limit}, $embedding)
         YIELD node as code, score
         WHERE score > $threshold
           ${projectFilter ? 'AND code.project_name = $projectFilter' : ''}
@@ -121,7 +120,6 @@ export class Neo4jService {
 
       const result = await executeQuery(query, {
         embedding,
-        limit,
         threshold,
         projectFilter
       })

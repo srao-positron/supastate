@@ -134,15 +134,16 @@ export async function POST(request: NextRequest) {
             })
             
             // Get recent memories without vector search
+            // Note: Using direct string interpolation for LIMIT due to Neo4j driver issue with numeric parameters
+            const limitValue = Math.floor(limit)
             const recentMemories = await neo4jService.executeQuery(`
               MATCH (m:Memory)
               ${filters.projectName ? 'WHERE m.project_name = $projectName' : ''}
               RETURN m as node, 0.5 as score
               ORDER BY m.created_at DESC
-              LIMIT $limit
+              LIMIT ${limitValue}
             `, {
-              projectName: filters.projectName,
-              limit: Math.floor(limit) // Ensure it's an integer
+              projectName: filters.projectName
             })
             
             results = recentMemories.records.map((record: any) => ({
