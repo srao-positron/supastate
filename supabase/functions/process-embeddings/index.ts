@@ -6,8 +6,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://deno.land/x/openai@v4.20.1/mod.ts'
-// Use CDN version that works with Deno
-import neo4j from 'https://cdn.neo4j.com/neo4j-javascript-driver/5.12.0/lib/browser/neo4j-web.esm.min.js'
+// Use unpkg CDN version that works with Deno - ESM build
+import neo4j from 'https://unpkg.com/neo4j-driver@5.12.0/lib/browser/neo4j-web.esm.js'
 
 const BATCH_SIZE = 100
 const PARALLEL_WORKERS = 10

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-// Use CDN version that works with Deno
-import neo4j from 'https://cdn.neo4j.com/neo4j-javascript-driver/5.12.0/lib/browser/neo4j-web.esm.min.js'
+// Use unpkg CDN version that works with Deno - ESM build
+import neo4j from 'https://unpkg.com/neo4j-driver@5.12.0/lib/browser/neo4j-web.esm.js'
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
 const CLAUDE_MODEL = 'claude-3-opus-20240229'
