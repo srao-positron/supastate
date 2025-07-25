@@ -78,11 +78,23 @@ export async function executeQuery<T = any>(
   const driver = getDriver()
   
   try {
+    // Ensure numeric parameters for LIMIT, SKIP, etc. are integers
+    const processedParams = parameters ? Object.entries(parameters).reduce((acc, [key, value]) => {
+      // Convert numeric parameters that Neo4j expects as integers
+      if ((key.toLowerCase() === 'limit' || key.toLowerCase() === 'skip' || key.toLowerCase() === 'offset') && typeof value === 'number') {
+        acc[key] = Math.floor(value)
+      } else {
+        acc[key] = value
+      }
+      return acc
+    }, {} as Record<string, any>) : {}
+    
     log.debug('Executing Neo4j query', {
       query: query.substring(0, 100) + '...',
-      params: parameters ? Object.keys(parameters) : 'none'
+      params: processedParams ? Object.keys(processedParams) : 'none',
+      paramValues: processedParams
     })
-    const result = await driver.executeQuery(query, parameters || {}, { database })
+    const result = await driver.executeQuery(query, processedParams, { database })
     return {
       records: result.records.map(record => record.toObject()),
       summary: result.summary
