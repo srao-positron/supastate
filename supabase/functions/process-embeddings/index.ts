@@ -287,65 +287,25 @@ async function processEmbeddingsBackground(taskId: string) {
 
 serve(async (req) => {
   try {
-    // Parse request to check if this is a background task execution
-    const url = new URL(req.url)
-    const taskId = url.searchParams.get('task_id')
-    
-    if (taskId) {
-      // This is a background task execution
-      console.log(`[Process Embeddings] Executing background task ${taskId}`)
-      
-      // Run the processing
-      await processEmbeddingsBackground(taskId)
-      
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          taskId,
-          message: 'Background task completed'
-        }),
-        { 
-          headers: { 'Content-Type': 'application/json' },
-          status: 200
-        }
-      )
-    }
-    
-    // This is the initial request - create a background task
     // Verify Neo4j connectivity first
     const driver = getDriver()
     await driver.verifyConnectivity()
     console.log('[Process Embeddings] Neo4j connection verified')
     
     // Create a unique task ID
-    const newTaskId = crypto.randomUUID()
+    const taskId = crypto.randomUUID()
     
-    // Schedule the background task
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-    
-    // Use Supabase's background task API
-    // Note: This creates a delayed function invocation
-    const { error } = await supabase.functions.invoke('process-embeddings', {
-      body: { task_id: newTaskId },
-      headers: {
-        'x-supabase-delay': '1s', // Start after 1 second
-        'x-supabase-timeout': '540s' // 9 minute timeout (max allowed)
-      }
+    // Start processing in background (don't await)
+    processEmbeddingsBackground(taskId).catch(error => {
+      console.error(`[Process Embeddings] Background task ${taskId} failed:`, error)
     })
-    
-    if (error) {
-      throw new Error(`Failed to schedule background task: ${error.message}`)
-    }
     
     // Return immediately
     return new Response(
       JSON.stringify({ 
         success: true, 
-        taskId: newTaskId,
-        message: 'Background task scheduled',
+        taskId: taskId,
+        message: 'Processing started in background',
         timestamp: new Date().toISOString()
       }),
       { 
