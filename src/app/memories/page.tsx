@@ -105,6 +105,18 @@ export default function MemoriesPage() {
         useSemanticSearch,
       })
 
+      // Ensure we have valid results before filtering
+      if (!filteredMemories || !filteredMemories.results) {
+        console.error('Invalid search response:', filteredMemories)
+        setMemories([])
+        setSearchResponse({
+          results: [],
+          total: 0,
+          hasMore: false
+        })
+        return
+      }
+
       // Apply date and time filters client-side
       if (filters?.dateRange?.from || filters?.dateRange?.to || filters?.timeRange?.startHour !== undefined || filters?.timeRange?.endHour !== undefined) {
         filteredMemories.results = filteredMemories.results.filter(memory => {

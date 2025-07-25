@@ -8,6 +8,8 @@ const nextConfig = {
   images: {
     domains: ['avatars.githubusercontent.com', 'github.com'],
   },
+  // Enable source maps in production for better debugging
+  productionBrowserSourceMaps: true,
 }
 
 module.exports = nextConfig
