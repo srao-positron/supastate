@@ -61,14 +61,19 @@ async function inspectNeo4jData() {
     detailResult.records.forEach((record: any, index: number) => {
       const memory = record.m
       console.log(`\n📝 Memory ${index + 1}:`)
-      console.log(`   ID: ${memory.id}`)
-      console.log(`   Chunk ID: ${memory.chunk_id || 'MISSING'}`)
-      console.log(`   User ID: ${memory.user_id || 'MISSING'}`)
-      console.log(`   Team ID: ${memory.team_id || 'MISSING'}`)
-      console.log(`   Project Name: ${memory.project_name || 'MISSING'}`)
-      console.log(`   Created At: ${memory.created_at}`)
-      console.log(`   Content: ${memory.content ? memory.content.substring(0, 100) + '...' : 'MISSING'}`)
-      console.log(`   Has Embedding: ${memory.embedding ? 'Yes' : 'NO - MISSING'}`)
+      console.log(`   Raw memory object type: ${typeof memory}`)
+      console.log(`   Raw memory keys: ${memory ? Object.keys(memory).join(', ') : 'null'}`)
+      
+      // Access properties correctly
+      const props = memory?.properties
+      console.log(`   ID: ${props?.id || 'MISSING'}`)
+      console.log(`   Chunk ID: ${props?.chunk_id || 'MISSING'}`)
+      console.log(`   User ID: ${props?.user_id || 'MISSING'}`)
+      console.log(`   Team ID: ${props?.team_id || 'MISSING'}`)
+      console.log(`   Project Name: ${props?.project_name || 'MISSING'}`)
+      console.log(`   Created At: ${props?.created_at || 'MISSING'}`)
+      console.log(`   Content: ${props?.content ? props.content.substring(0, 100) + '...' : 'MISSING'}`)
+      console.log(`   Has Embedding: ${props?.embedding ? 'Yes' : 'NO - MISSING'}`)
       
       // Check metadata
       if (memory.metadata) {

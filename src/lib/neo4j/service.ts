@@ -76,18 +76,19 @@ export class Neo4jService {
 
       return result.records.map(record => {
         const memory = record.memory
+        const props = memory?.properties || memory
         return {
           node: {
-            id: memory.properties?.id || memory.id,
-            content: memory.properties?.content || memory.content,
-            embedding: memory.properties?.embedding || memory.embedding,
-            project_name: memory.properties?.project_name || memory.project_name,
-            user_id: memory.properties?.user_id || memory.user_id,
-            team_id: memory.properties?.team_id || memory.team_id,
-            type: memory.properties?.type || memory.type,
-            created_at: memory.properties?.created_at || memory.created_at,
-            updated_at: memory.properties?.updated_at || memory.updated_at,
-            metadata: memory.properties?.metadata ? JSON.parse(memory.properties.metadata) : memory.metadata
+            id: props.id,
+            content: props.content,
+            embedding: props.embedding,
+            project_name: props.project_name,
+            user_id: props.user_id,
+            team_id: props.team_id,
+            type: props.type,
+            created_at: props.created_at,
+            updated_at: props.updated_at,
+            metadata: props.metadata ? (typeof props.metadata === 'string' ? JSON.parse(props.metadata) : props.metadata) : {}
           } as MemoryNode,
           score: record.score
         }
@@ -186,7 +187,7 @@ export class Neo4jService {
     const result = await executeQuery(query, { startNodeId })
 
     return result.records.map(record => ({
-      node: record.node,
+      node: record.node?.properties || record.node,
       path: record.relationshipPath,
       score: 1 / (record.distance + 1) // Convert distance to score
     }))
@@ -258,7 +259,7 @@ export class Neo4jService {
       const result = await executeQuery(query, params)
 
       return result.records.map(record => ({
-        node: record.memory,
+        node: record.memory?.properties || record.memory,
         score: record.score,
         relationships: record.relatedNodes
       }))

@@ -111,6 +111,8 @@ async function createMemoryNode(data: {
   metadata?: Record<string, any>
   created_at: string
   updated_at: string
+  chunk_id?: string
+  session_id?: string
 }) {
   const query = `
     MERGE (m:Memory {id: $id})
@@ -121,6 +123,8 @@ async function createMemoryNode(data: {
       m.user_id = $user_id,
       m.team_id = $team_id,
       m.type = $type,
+      m.chunk_id = $chunk_id,
+      m.session_id = $session_id,
       m.created_at = $created_at,
       m.updated_at = $updated_at,
       m.metadata = $metadata
@@ -131,6 +135,8 @@ async function createMemoryNode(data: {
       m.user_id = $user_id,
       m.team_id = $team_id,
       m.type = $type,
+      m.chunk_id = $chunk_id,
+      m.session_id = $session_id,
       m.updated_at = $updated_at,
       m.metadata = $metadata
     RETURN m
@@ -144,6 +150,8 @@ async function createMemoryNode(data: {
     user_id: data.user_id || null,
     team_id: data.team_id || null,
     type: data.type || 'general',
+    chunk_id: data.chunk_id || null,
+    session_id: data.session_id || null,
     created_at: data.created_at,
     updated_at: data.updated_at,
     metadata: JSON.stringify(data.metadata || {})
@@ -197,6 +205,15 @@ async function processEmbeddings() {
       // Process chunks
       const promises = memoryChunks.map(async (chunk) => {
         try {
+          console.log(`[Process Embeddings] Processing chunk ${chunk.id}`, {
+            chunk_id: chunk.chunk_id,
+            workspace_id: chunk.workspace_id,
+            has_metadata: !!chunk.metadata,
+            metadata_project: chunk.metadata?.projectName,
+            metadata_userId: chunk.metadata?.userId,
+            metadata_teamId: chunk.metadata?.teamId
+          })
+          
           // Check if embedding already exists in metadata
           let embedding: number[] | null = null
           
@@ -227,32 +244,40 @@ async function processEmbeddings() {
           const memoryId = chunk.chunk_id || crypto.randomUUID()
           const now = new Date().toISOString()
           
+          // Extract project name from metadata (can be projectName or projectPath)
+          let projectName = chunk.metadata?.projectName || 
+                           (chunk.metadata?.projectPath ? chunk.metadata.projectPath.split('/').pop() : null) ||
+                           chunk.project_name ||
+                           'default'
+          
+          // Extract user_id and team_id from metadata or workspace_id
+          const userId = chunk.metadata?.userId || 
+                        (chunk.workspace_id?.startsWith('user:') ? chunk.workspace_id.substring(5) : undefined)
+          const teamId = chunk.metadata?.teamId || 
+                        (chunk.workspace_id?.startsWith('team:') ? chunk.workspace_id.substring(5) : undefined)
+          
           await createMemoryNode({
             id: memoryId,
             content: chunk.content,
             embedding: embedding,
-            project_name: chunk.metadata?.projectPath ? 
-              chunk.metadata.projectPath.split('/').pop() : 'default',
-            user_id: chunk.workspace_id?.startsWith('user:') ? 
-              chunk.workspace_id.substring(5) : undefined,
-            team_id: chunk.workspace_id?.startsWith('team:') ? 
-              chunk.workspace_id.substring(5) : undefined,
+            project_name: projectName,
+            user_id: userId,
+            team_id: teamId,
             type: chunk.metadata?.messageType || 'general',
+            chunk_id: chunk.chunk_id,
+            session_id: chunk.session_id,
             metadata: chunk.metadata || {},
             created_at: chunk.created_at || now,
             updated_at: now
           })
           
           // Create relationships
-          const projectName = chunk.metadata?.projectPath ? 
-            chunk.metadata.projectPath.split('/').pop() : 'default'
           
           await ensureProjectExists(projectName)
           await createProjectRelationship(memoryId, projectName)
           
           // Create user relationship if user_id exists
-          if (chunk.workspace_id?.startsWith('user:')) {
-            const userId = chunk.workspace_id.substring(5)
+          if (userId) {
             await createUserRelationship(userId, memoryId)
           }
           
