@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { createHash } from 'crypto'
 import Logger from '@/lib/logging/logger'
 import { getRequestId, sanitizeForLogging } from '@/lib/logging/request-id'
-import { ingestionService } from '@/lib/neo4j/ingestion'
 
 // Enhanced schema with rich metadata support
 const MemorySyncSchema = z.object({
@@ -153,87 +152,101 @@ export async function POST(request: NextRequest) {
       authenticatedTeamId = teamId
     }
     
-    authLogger.info('Starting Neo4j ingestion', { totalChunks: chunks.length })
-    let neo4jSuccessCount = 0
-    let neo4jErrors = 0
+    // Prepare workspace_id for the queue entries
+    const workspaceId = authenticatedTeamId ? `team:${authenticatedTeamId}` : `user:${authenticatedUserId}`
+    
+    authLogger.info('Creating memory queue entries', { totalChunks: chunks.length })
+    let queueSuccessCount = 0
+    let queueErrors = 0
     
     try {
-      // Process chunks in parallel for Neo4j (with concurrency limit)
-      const neo4jPromises = chunks.map((chunk, index) => 
-        ingestionService.ingestMemory({
-          id: `${authenticatedTeamId || authenticatedUserId}-${chunk.chunkId}`,
-          content: chunk.content,
-          project_name: projectName,
-          user_id: authenticatedUserId || undefined,
-          team_id: authenticatedTeamId || undefined,
-          type: chunk.messageType === 'user' ? 'question' : chunk.messageType === 'assistant' ? 'answer' : 'general',
-          metadata: {
+      // Create queue entries for each chunk
+      const queuePromises = chunks.map(async (chunk) => {
+        try {
+          // Prepare metadata with all relevant information including the embedding
+          const queueMetadata = {
             ...chunk.metadata,
             messageType: chunk.messageType,
-            sessionId: body.sessionId,
             conversationId: body.conversationId,
             branchName: body.branchName,
             commitSha: body.commitSha,
-          },
-          chunk_id: chunk.chunkId,
-          session_id: body.sessionId,
-          file_paths: chunk.metadata?.filePaths,
-          topics: chunk.metadata?.topics,
-          entities_mentioned: chunk.metadata?.entitiesMentioned,
-          tools_used: chunk.metadata?.toolsUsed,
-        }, {
-          useInferenceEngine: true, // Enable automatic relationship creation
-          inferEvolution: index > 0, // Check evolution for non-first chunks
-        }).then(() => {
-          neo4jSuccessCount++
+            projectName,
+            embedding: chunk.embedding, // Store the pre-computed embedding in metadata
+            userId: authenticatedUserId,
+            teamId: authenticatedTeamId,
+          }
+          
+          // Insert into memory_queue
+          const { error } = await supabase
+            .from('memory_queue')
+            .upsert({
+              workspace_id: workspaceId,
+              session_id: body.sessionId,
+              chunk_id: chunk.chunkId,
+              content: chunk.content,
+              metadata: queueMetadata,
+              status: 'pending',
+            }, {
+              onConflict: 'workspace_id,chunk_id',
+              ignoreDuplicates: false, // Update existing entries
+            })
+          
+          if (error) {
+            queueErrors++
+            authLogger.error('Failed to create queue entry', error, { chunkId: chunk.chunkId })
+            return { error }
+          }
+          
+          queueSuccessCount++
           return { success: true }
-        }).catch((error) => {
-          neo4jErrors++
-          authLogger.error('Neo4j ingestion failed for chunk', error, { chunkId: chunk.chunkId })
+        } catch (error) {
+          queueErrors++
+          authLogger.error('Unexpected error creating queue entry', error, { chunkId: chunk.chunkId })
           return { error }
-        })
-      )
+        }
+      })
       
       // Process with concurrency limit
-      const concurrencyLimit = 5
-      for (let i = 0; i < neo4jPromises.length; i += concurrencyLimit) {
-        await Promise.all(neo4jPromises.slice(i, i + concurrencyLimit))
+      const concurrencyLimit = 10 // Higher limit since we're just inserting to DB
+      for (let i = 0; i < queuePromises.length; i += concurrencyLimit) {
+        await Promise.all(queuePromises.slice(i, i + concurrencyLimit))
       }
       
-      authLogger.info('Neo4j ingestion completed', { 
-        success: neo4jSuccessCount, 
-        failed: neo4jErrors 
+      authLogger.info('Queue entries created', { 
+        success: queueSuccessCount, 
+        failed: queueErrors 
       })
-    } catch (neo4jError) {
-      authLogger.error('Neo4j ingestion batch failed', neo4jError)
+    } catch (queueError) {
+      authLogger.error('Queue creation batch failed', queueError)
       // Log error but continue - we'll return partial success
     }
     
     const syncStatus = {
-      workspace: authenticatedTeamId ? `team:${authenticatedTeamId}` : `user:${authenticatedUserId}`,
+      workspace: workspaceId,
       project_name: projectName,
       sync_type: 'memory',
-      status: neo4jErrors > 0 ? 'partial' : 'completed',
-      chunks_synced: neo4jSuccessCount,
-      chunks_failed: neo4jErrors,
+      status: queueErrors > 0 ? 'partial' : 'completed',
+      chunks_queued: queueSuccessCount,
+      chunks_failed: queueErrors,
       duration_ms: Date.now() - new Date().getTime(),
     }
     
     authLogger.info('Sync completed', syncStatus)
     
-    if (neo4jErrors > 0 && neo4jSuccessCount === 0) {
+    if (queueErrors > 0 && queueSuccessCount === 0) {
       return NextResponse.json({ 
-        error: 'Failed to sync all chunks', 
+        error: 'Failed to queue all chunks', 
         requestId,
-        details: process.env.NODE_ENV === 'development' ? 'Neo4j ingestion failed' : undefined 
+        details: process.env.NODE_ENV === 'development' ? 'Queue creation failed' : undefined 
       }, { status: 500 })
     }
     
     return NextResponse.json({ 
       success: true, 
-      synced: neo4jSuccessCount,
-      failed: neo4jErrors,
-      workspace: authenticatedTeamId ? 'team' : 'personal'
+      queued: queueSuccessCount,
+      failed: queueErrors,
+      workspace: authenticatedTeamId ? 'team' : 'personal',
+      message: 'Chunks queued for processing'
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
