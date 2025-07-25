@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import neo4j from 'https://esm.sh/neo4j-driver@5.28.1'
+// Use CDN version that works with Deno
+import neo4j from 'https://cdn.neo4j.com/neo4j-javascript-driver/5.12.0/lib/browser/neo4j-web.esm.min.js'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
