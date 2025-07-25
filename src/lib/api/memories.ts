@@ -210,35 +210,22 @@ export class MemoriesAPI {
 
   async getProjects(): Promise<string[]> {
     try {
-      const { teamId, userId } = await this.getWorkspaceInfo()
-      if (!teamId && !userId) return []
+      const { data: { session } } = await this.supabase.auth.getSession()
+      if (!session) return []
 
-      // Use RPC to get distinct project names more efficiently
-      let query = this.supabase
-        .from('memories')
-        .select('project_name')
-      
-      // Filter by workspace
-      // If user is part of a team, show both team memories AND their personal memories
-      if (teamId) {
-        query = query.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
-      } else {
-        query = query.eq('user_id', userId)
+      const response = await fetch('/api/memories/projects', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get projects')
       }
-      
-      // Get all results to ensure we capture all unique projects
-      const { data, error } = await query
 
-      if (error) throw error
-
-      // Extract unique project names and filter out nulls/empty strings
-      const uniqueProjects = [...new Set(
-        data?.map(item => item.project_name)
-          .filter(name => name && name.trim() !== '') || []
-      )]
-      
-      // Sort alphabetically
-      return uniqueProjects.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+      const projects = await response.json()
+      return projects
     } catch (error) {
       console.error('Get projects error:', error)
       return []
@@ -250,48 +237,22 @@ export class MemoriesAPI {
     projectCounts: Record<string, number>
   }> {
     try {
-      const { teamId, userId } = await this.getWorkspaceInfo()
-      if (!teamId && !userId) return { totalMemories: 0, projectCounts: {} }
+      const { data: { session } } = await this.supabase.auth.getSession()
+      if (!session) return { totalMemories: 0, projectCounts: {} }
 
-      // Get total count
-      let countQuery = this.supabase
-        .from('memories')
-        .select('*', { count: 'exact', head: true })
-      
-      // Filter by workspace - show both team memories AND personal memories
-      if (teamId) {
-        countQuery = countQuery.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
-      } else {
-        countQuery = countQuery.eq('user_id', userId)
-      }
-      
-      const { count: totalCount } = await countQuery
-
-      // Get counts by project
-      let projectQuery = this.supabase
-        .from('memories')
-        .select('project_name')
-      
-      // Filter by workspace - show both team memories AND personal memories
-      if (teamId) {
-        projectQuery = projectQuery.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
-      } else {
-        projectQuery = projectQuery.eq('user_id', userId)
-      }
-      
-      const { data: projectData, error } = await projectQuery
-
-      if (error) throw error
-
-      const projectCounts: Record<string, number> = {}
-      projectData?.forEach(item => {
-        projectCounts[item.project_name] = (projectCounts[item.project_name] || 0) + 1
+      const response = await fetch('/api/memories/stats', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
       })
 
-      return {
-        totalMemories: totalCount || 0,
-        projectCounts,
+      if (!response.ok) {
+        throw new Error('Failed to get memory stats')
       }
+
+      const stats = await response.json()
+      return stats
     } catch (error) {
       console.error('Get memory stats error:', error)
       return {

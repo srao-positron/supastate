@@ -126,13 +126,30 @@ export async function POST(request: NextRequest) {
           break
 
         case 'hybrid':
-          // If no query and no embedding, just return empty results for initial load
+          // If no query provided, return recent memories for initial load
           if (!embedding) {
-            log.info('No query provided, returning empty results', {
+            log.info('No query provided, returning recent memories', {
               service: 'HybridSearch',
               searchType: 'hybrid'
             })
-            results = []
+            
+            // Get recent memories without vector search
+            const recentMemories = await neo4jService.executeQuery(`
+              MATCH (m:Memory)
+              ${filters.projectName ? 'WHERE m.project_name = $projectName' : ''}
+              RETURN m as node, 0.5 as score
+              ORDER BY m.created_at DESC
+              LIMIT $limit
+            `, {
+              projectName: filters.projectName,
+              limit
+            })
+            
+            results = recentMemories.records.map((record: any) => ({
+              node: record.node,
+              score: record.score,
+              nodeType: 'Memory'
+            }))
             break
           }
           
