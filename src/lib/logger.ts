@@ -21,7 +21,7 @@ const logFormat = printf(({ level, message, timestamp, stack, ...metadata }) => 
 
 // Create logger instance
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+  level: process.env.LOG_LEVEL || 'debug', // Always use debug level for now
   format: combine(
     errors({ stack: true }),
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
