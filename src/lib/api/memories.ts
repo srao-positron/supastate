@@ -129,10 +129,38 @@ export class MemoriesAPI {
           project_name: props.project_name || 'Unknown Project',
           chunk_id: props.chunk_id || result.key || props.id || '',
           content: result.content || props.content || '',
-          metadata: {
-            ...result.metadata,
-            ...props.metadata
-          },
+          metadata: (() => {
+            // Handle metadata which might be a string or object
+            let parsedMetadata = {}
+            
+            // Parse result.metadata if it's a string
+            if (result.metadata) {
+              if (typeof result.metadata === 'string') {
+                try {
+                  parsedMetadata = JSON.parse(result.metadata)
+                } catch (e) {
+                  console.warn('Failed to parse result.metadata:', e)
+                }
+              } else {
+                parsedMetadata = result.metadata
+              }
+            }
+            
+            // Parse props.metadata if it's a string and merge
+            if (props.metadata) {
+              if (typeof props.metadata === 'string') {
+                try {
+                  parsedMetadata = { ...parsedMetadata, ...JSON.parse(props.metadata) }
+                } catch (e) {
+                  console.warn('Failed to parse props.metadata:', e)
+                }
+              } else {
+                parsedMetadata = { ...parsedMetadata, ...props.metadata }
+              }
+            }
+            
+            return parsedMetadata
+          })(),
           created_at: props.created_at || new Date().toISOString(),
           updated_at: props.updated_at || new Date().toISOString(),
           similarity: result.score
