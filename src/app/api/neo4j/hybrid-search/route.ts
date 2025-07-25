@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
               LIMIT $limit
             `, {
               projectName: filters.projectName,
-              limit
+              limit: Math.floor(limit) // Ensure it's an integer
             })
             
             results = recentMemories.records.map((record: any) => ({
