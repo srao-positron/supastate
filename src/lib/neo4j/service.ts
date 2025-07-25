@@ -17,10 +17,24 @@ import {
 } from './types'
 
 export class Neo4jService {
-  // Initialize connection
+  private initialized = false
+  
+  // Initialize connection with caching
   async initialize(): Promise<void> {
-    await verifyConnectivity()
-    console.log('Neo4j service initialized')
+    if (this.initialized) {
+      return
+    }
+    
+    try {
+      await verifyConnectivity()
+      this.initialized = true
+      console.log('Neo4j service initialized')
+    } catch (error) {
+      console.error('Neo4j initialization failed:', error)
+      // Reset flag so we can retry
+      this.initialized = false
+      throw error
+    }
   }
 
   // ============= VECTOR OPERATIONS =============

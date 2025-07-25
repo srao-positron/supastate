@@ -27,6 +27,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Initialize Neo4j service
+    try {
+      await neo4jService.initialize()
+    } catch (initError) {
+      console.error('[HybridSearch] Failed to initialize Neo4j:', initError)
+      return NextResponse.json({
+        error: 'Failed to connect to Neo4j database',
+        details: process.env.NODE_ENV === 'development' ? initError.message : undefined
+      }, { status: 503 })
+    }
+
     // Get request body
     const body = await request.json()
     const { 
@@ -211,6 +222,21 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Initialize Neo4j service
+    try {
+      await neo4jService.initialize()
+    } catch (initError) {
+      console.error('[HybridSearch GET] Failed to initialize Neo4j:', initError)
+      // Return empty suggestions instead of error
+      return NextResponse.json({
+        suggestions: {
+          projects: [],
+          concepts: [],
+          relationships: []
+        }
+      })
     }
 
     const { searchParams } = new URL(request.url)

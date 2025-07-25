@@ -144,12 +144,24 @@ export default function MemoriesPage() {
           hasMore: false
         })
       } else {
-        setError('Unable to connect to memory database. Please check your connection.')
-        toast({
-          title: 'Connection Error',
-          description: 'Unable to connect to memory database. Please ensure the database is running.',
-          variant: 'destructive',
-        })
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error('Memory search error details:', errorMessage)
+        
+        if (errorMessage.includes('Failed to connect to Neo4j')) {
+          setError('Unable to connect to Neo4j database. The connection may be initializing.')
+          toast({
+            title: 'Database Connection',
+            description: 'Neo4j is initializing. Please try again in a moment.',
+            variant: 'destructive',
+          })
+        } else {
+          setError('Failed to search memories. Please try again.')
+          toast({
+            title: 'Search Error',
+            description: errorMessage,
+            variant: 'destructive',
+          })
+        }
       }
     } finally {
       setIsLoading(false)
