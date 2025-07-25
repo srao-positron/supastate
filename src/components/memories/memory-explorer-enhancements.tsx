@@ -153,18 +153,28 @@ interface MemoryTagsProps {
 export function MemoryTags({ memory }: MemoryTagsProps) {
   const tags: string[] = []
   
-  // Extract tags from metadata
-  if (memory.metadata?.tools && Array.isArray(memory.metadata.tools)) {
-    tags.push(...memory.metadata.tools)
+  // Parse metadata if it's a string
+  let metadata = memory.metadata
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata)
+    } catch (e) {
+      metadata = {}
+    }
   }
   
-  if (memory.metadata?.topics && Array.isArray(memory.metadata.topics)) {
-    tags.push(...memory.metadata.topics)
+  // Extract tags from metadata
+  if (metadata?.tools && Array.isArray(metadata.tools)) {
+    tags.push(...metadata.tools)
+  }
+  
+  if (metadata?.topics && Array.isArray(metadata.topics)) {
+    tags.push(...metadata.topics)
   }
   
   // Add message type if available in metadata
-  if (memory.metadata?.messageType) {
-    tags.push(memory.metadata.messageType)
+  if (metadata?.messageType) {
+    tags.push(metadata.messageType)
   }
   
   if (tags.length === 0) return null
@@ -231,12 +241,32 @@ export function MemoryInsights({ memories, totalMemories, projectCount }: Memory
   const avgWordsPerMemory = memories.length > 0 ? Math.round(totalWords / memories.length) : 0
   
   const messageTypes = memories.reduce((acc, m) => {
-    // Check various possible locations for message type
-    const type = m.metadata?.messageType || 
-                 m.metadata?.type || 
-                 m.metadata?.role ||
-                 (m.content.toLowerCase().includes('user:') ? 'user' : 
-                  m.content.toLowerCase().includes('assistant:') ? 'assistant' : 'unknown')
+    // Parse metadata if it's a string
+    let metadata = m.metadata
+    if (typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata)
+      } catch (e) {
+        metadata = {}
+      }
+    }
+    
+    // Detect message type from content patterns
+    let type = 'unknown'
+    const contentLower = m.content.toLowerCase()
+    const contentStart = m.content.substring(0, 50).toLowerCase()
+    
+    // Check for explicit patterns at the beginning of content
+    if (contentStart.startsWith('user:') || contentStart.includes('\nuser:')) {
+      type = 'user'
+    } else if (contentStart.startsWith('assistant:') || contentStart.includes('\nassistant:')) {
+      type = 'assistant'
+    } else if (contentLower.includes('user:') && contentLower.indexOf('user:') < 100) {
+      type = 'user'
+    } else if (contentLower.includes('assistant:') && contentLower.indexOf('assistant:') < 100) {
+      type = 'assistant'
+    }
+    
     acc[type] = (acc[type] || 0) + 1
     return acc
   }, {} as Record<string, number>)

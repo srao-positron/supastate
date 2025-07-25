@@ -86,10 +86,14 @@ serve(async (req) => {
     const session = driver.session()
     
     try {
+      // Parse request body
+      const { manual_trigger, force_all } = await req.json().catch(() => ({ manual_trigger: false, force_all: false }))
+      
       // Get all unique projects with recent activity from Neo4j
+      const timeFilter = force_all ? '' : 'WHERE m.created_at >= datetime() - duration(\'P1D\')'
       const result = await session.run(`
         MATCH (m:Memory)
-        WHERE m.created_at >= datetime() - duration('P1D')
+        ${timeFilter}
         WITH m.project_name as project_name, 
              COALESCE(m.team_id, m.user_id) as workspace_id,
              m.created_at as created_at
@@ -157,11 +161,12 @@ serve(async (req) => {
       // Get memories for this project from Neo4j
       const memoriesSession = driver.session()
       try {
+        const memoryTimeFilter = force_all ? '' : 'AND m.created_at >= datetime() - duration(\'P7D\')'
         const memoriesResult = await memoriesSession.run(`
           MATCH (m:Memory)
           WHERE m.project_name = $project_name
             AND (m.team_id = $workspace_id OR m.user_id = $workspace_id)
-            AND m.created_at >= datetime() - duration('P1D')
+            ${memoryTimeFilter}
           RETURN m.content as content, m.created_at as created_at
           ORDER BY m.created_at DESC
           LIMIT 100

@@ -21,8 +21,18 @@ export function MemoryActivityCharts({ memories }: MemoryActivityChartsProps) {
     })
 
     const activityMap = memories.reduce((acc, memory) => {
-      const date = memory.metadata?.startTime 
-        ? new Date(memory.metadata.startTime).toISOString().split('T')[0]
+      // Parse metadata if it's a string
+      let metadata = memory.metadata
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata)
+        } catch (e) {
+          metadata = {}
+        }
+      }
+      
+      const date = metadata?.startTime 
+        ? new Date(metadata.startTime).toISOString().split('T')[0]
         : new Date(memory.created_at).toISOString().split('T')[0]
       
       if (last7Days.includes(date)) {
@@ -41,8 +51,18 @@ export function MemoryActivityCharts({ memories }: MemoryActivityChartsProps) {
   const hourlyDistribution = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, i) => i)
     const hourMap = memories.reduce((acc, memory) => {
-      const hour = memory.metadata?.startTime 
-        ? new Date(memory.metadata.startTime).getHours()
+      // Parse metadata if it's a string
+      let metadata = memory.metadata
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata)
+        } catch (e) {
+          metadata = {}
+        }
+      }
+      
+      const hour = metadata?.startTime 
+        ? new Date(metadata.startTime).getHours()
         : new Date(memory.created_at).getHours()
       
       acc[hour] = (acc[hour] || 0) + 1
@@ -64,8 +84,18 @@ export function MemoryActivityCharts({ memories }: MemoryActivityChartsProps) {
   // Calculate project activity trends
   const projectTrends = useMemo(() => {
     const projectDays = memories.reduce((acc, memory) => {
-      const date = memory.metadata?.startTime 
-        ? new Date(memory.metadata.startTime).toISOString().split('T')[0]
+      // Parse metadata if it's a string
+      let metadata = memory.metadata
+      if (typeof metadata === 'string') {
+        try {
+          metadata = JSON.parse(metadata)
+        } catch (e) {
+          metadata = {}
+        }
+      }
+      
+      const date = metadata?.startTime 
+        ? new Date(metadata.startTime).toISOString().split('T')[0]
         : new Date(memory.created_at).toISOString().split('T')[0]
       
       const key = `${memory.project_name}:${date}`
