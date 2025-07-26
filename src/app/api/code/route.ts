@@ -64,6 +64,13 @@ export async function GET(request: Request) {
 
     // Get workspace ID
     const workspaceId = teamId ? `team:${teamId}` : `user:${user.id}`
+    
+    console.log('[Code API] Auth info:', {
+      userId: user.id,
+      workspaceId,
+      teamId,
+      projectName: params.projectName
+    })
 
     // Get Neo4j driver
     const neo4jDriver = getDriver()
@@ -98,6 +105,12 @@ export async function GET(request: Request) {
       const countQuery = query + ` RETURN count(e) as total`
       const countResult = await session.run(countQuery, queryParams)
       const total = countResult.records[0]?.get('total')?.toNumber() || 0
+      
+      console.log('[Code API] Query count:', {
+        total,
+        query: countQuery,
+        params: queryParams
+      })
 
       // Get entities with file information
       query += `

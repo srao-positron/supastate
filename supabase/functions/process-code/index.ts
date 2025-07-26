@@ -75,7 +75,8 @@ async function processCodeFile(file: any, supabase: any, openai: OpenAI) {
     let entities: CodeEntity[] = []
     let relationships: Relationship[] = []
     
-    if (file.language === 'typescript' || file.language === 'javascript' || 
+    if (file.language === 'typescript' || file.language === 'ts' || 
+        file.language === 'javascript' || file.language === 'js' || 
         file.language === 'tsx' || file.language === 'jsx') {
       try {
         console.log(`[Process Code] Starting TypeScript parsing for ${file.file_path}`)
@@ -231,6 +232,7 @@ ${entity.content.substring(0, 4000)}`
             metadata: $metadata,
             file_id: $file_id,
             project_name: $project_name,
+            workspace_id: $workspace_id,
             created_at: datetime()
           })
           WITH n
@@ -249,7 +251,8 @@ ${entity.content.substring(0, 4000)}`
           embedding: entity.embedding || null,
           metadata: JSON.stringify(entity.metadata),
           file_id: fileId,
-          project_name: file.project_name
+          project_name: file.project_name,
+          workspace_id: file.workspace_id
         })
       }
 

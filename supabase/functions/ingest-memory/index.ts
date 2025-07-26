@@ -15,7 +15,6 @@ interface MemoryChunk {
 }
 
 interface MemoryIngestionRequest {
-  workspaceId: string
   teamId?: string
   projectName: string
   chunks: MemoryChunk[]

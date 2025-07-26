@@ -120,3 +120,24 @@ port = 54327
 vector_port = 54328
 # Configure one of the supported backends: `postgres`, `bigquery`
 backend = "postgres"
+[functions.schedule-code-processing]
+enabled = true
+verify_jwt = true
+import_map = "./functions/schedule-code-processing/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/schedule-code-processing/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/schedule-code-processing/*.html" ]
+
+[functions.fix-workspace-ids]
+enabled = true
+verify_jwt = true
+import_map = "./functions/fix-workspace-ids/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/fix-workspace-ids/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/fix-workspace-ids/*.html" ]

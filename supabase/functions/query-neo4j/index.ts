@@ -27,14 +27,50 @@ function getDriver() {
   return driver
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 serve(async (req) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     // Verify auth
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
-        { headers: { 'Content-Type': 'application/json' }, status: 401 }
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
+    // Initialize Supabase client with user's token
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
     
@@ -44,7 +80,7 @@ serve(async (req) => {
     if (!query) {
       return new Response(
         JSON.stringify({ error: 'Query is required' }),
-        { headers: { 'Content-Type': 'application/json' }, status: 400 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
     
@@ -78,7 +114,7 @@ serve(async (req) => {
       
       return new Response(
         JSON.stringify({ results }),
-        { headers: { 'Content-Type': 'application/json' }, status: 200 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       )
       
     } finally {
@@ -89,7 +125,7 @@ serve(async (req) => {
     console.error('Query error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { headers: { 'Content-Type': 'application/json' }, status: 500 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
 })

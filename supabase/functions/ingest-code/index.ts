@@ -19,7 +19,6 @@ interface CodeFile {
 
 interface CodeIngestionRequest {
   files: CodeFile[]
-  workspaceId: string
   projectName: string
   fullSync?: boolean
 }
@@ -36,6 +35,41 @@ serve(async (req, connInfo) => {
   }
 
   try {
+    // Get the authorization header
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
+    // Initialize Supabase client with user's token
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
     // Verify request method
     if (req.method !== 'POST') {
       return new Response('Method not allowed', { 
@@ -54,19 +88,28 @@ serve(async (req, connInfo) => {
       )
     }
 
-    if (!body.workspaceId || !body.projectName) {
+    if (!body.projectName) {
       return new Response(
-        JSON.stringify({ error: 'workspaceId and projectName are required' }),
+        JSON.stringify({ error: 'projectName is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
-    console.log(`[Ingest Code] Received ${body.files.length} files for project ${body.projectName}`)
+    // Use authenticated user's workspace
+    const workspaceId = `user:${user.id}`
 
-    // Initialize Supabase client
+    console.log(`[Ingest Code] User ${user.id} uploading ${body.files.length} files for project ${body.projectName}`)
+
+    // Create service role client for database operations
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
 
     // Create a processing task
