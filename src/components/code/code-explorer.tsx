@@ -246,6 +246,7 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
               size="sm"
               onClick={linkMemoriesToCode}
               disabled={isLinking}
+              title="Re-link memories to code entities (happens automatically during memory ingestion)"
             >
               {isLinking ? (
                 <>
@@ -255,7 +256,7 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
               ) : (
                 <>
                   <Link className="h-4 w-4 mr-2" />
-                  Link Memories to Code
+                  Re-link Memories
                 </>
               )}
             </Button>

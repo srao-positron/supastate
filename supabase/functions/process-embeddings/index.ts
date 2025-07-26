@@ -302,6 +302,54 @@ async function processEmbeddingsBackground(taskId: string) {
     
     console.log(`[Process Embeddings] Task ${taskId} completed - Total processed: ${totalProcessed}, Total errors: ${totalErrors}`)
     
+    // Trigger memory-code linking for processed memories
+    if (totalProcessed > 0) {
+      console.log('[Process Embeddings] Triggering memory-code linking for processed memories')
+      try {
+        // Get unique project names from processed memories
+        const { data: processedMemories } = await supabase
+          .from('memory_queue')
+          .select('project_name')
+          .eq('status', 'completed')
+          .not('project_name', 'is', null)
+          .limit(100)
+        
+        const projectNames = [...new Set(processedMemories?.map(m => m.project_name) || [])]
+        
+        // Trigger linking for each project
+        for (const projectName of projectNames) {
+          if (!projectName) continue
+          
+          console.log(`[Process Embeddings] Linking memories for project: ${projectName}`)
+          
+          const linkResponse = await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/link-memory-code`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                projectName,
+                threshold: 0.7
+              }),
+            }
+          )
+          
+          if (!linkResponse.ok) {
+            console.error(`[Process Embeddings] Failed to trigger linking for ${projectName}: ${await linkResponse.text()}`)
+          } else {
+            const result = await linkResponse.json()
+            console.log(`[Process Embeddings] Linked ${result.processed || 0} memories for ${projectName}`)
+          }
+        }
+      } catch (linkError) {
+        console.error('[Process Embeddings] Error triggering memory-code linking:', linkError)
+        // Don't throw - this is a best-effort operation
+      }
+    }
+    
   } catch (error) {
     console.error(`[Process Embeddings] Background task ${taskId} error:`, error)
     throw error
