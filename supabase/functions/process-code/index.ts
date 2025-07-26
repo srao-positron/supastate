@@ -218,26 +218,29 @@ ${entity.content.substring(0, 4000)}`
                          entity.type === 'class' ? 'Class' : 'Function'
         
         await session.run(`
-          CREATE (n:${nodeLabel}:CodeEntity {
-            id: $id,
-            name: $name,
-            type: $type,
-            content: $content,
-            signature: $signature,
-            line_start: $line_start,
-            line_end: $line_end,
-            column_start: $column_start,
-            column_end: $column_end,
-            embedding: $embedding,
-            metadata: $metadata,
-            file_id: $file_id,
-            project_name: $project_name,
-            workspace_id: $workspace_id,
-            created_at: datetime($last_modified)
-          })
+          MERGE (n:${nodeLabel}:CodeEntity {id: $id})
+          ON CREATE SET 
+            n.name = $name,
+            n.type = $type,
+            n.content = $content,
+            n.signature = $signature,
+            n.line_start = $line_start,
+            n.line_end = $line_end,
+            n.column_start = $column_start,
+            n.column_end = $column_end,
+            n.embedding = $embedding,
+            n.metadata = $metadata,
+            n.file_id = $file_id,
+            n.project_name = $project_name,
+            n.workspace_id = $workspace_id,
+            n.created_at = datetime($last_modified)
+          ON MATCH SET
+            n.content = $content,
+            n.embedding = $embedding,
+            n.updated_at = datetime()
           WITH n
           MATCH (f:CodeFile {id: $file_id})
-          CREATE (n)-[:DEFINED_IN]->(f)
+          MERGE (n)-[:DEFINED_IN]->(f)
         `, {
           id: entity.id,
           name: entity.name,

@@ -151,7 +151,8 @@ async function processMemoryBatch(chunks: any[], openai: OpenAI, supabase: any) 
       }
       
       // Create memory node in Neo4j
-      const memoryId = chunk.chunk_id || crypto.randomUUID()
+      // Always generate a unique ID for each memory
+      const memoryId = crypto.randomUUID()
       const now = new Date().toISOString()
       
       // Extract project name from metadata
@@ -219,10 +220,13 @@ async function processMemoryBatch(chunks: any[], openai: OpenAI, supabase: any) 
         project_name: projectName,
         user_id: userId || null,
         team_id: teamId || null,
-        type: chunk.metadata?.messageType || chunk.metadata?.type || 'general',
+        type: getMemoryType(chunk.metadata),
         chunk_id: chunk.chunk_id || null,
         session_id: chunk.session_id || chunk.metadata?.sessionId || null,
-        created_at: chunk.metadata?.startTime || chunk.metadata?.endTime || chunk.created_at || now,
+        created_at: chunk.metadata?.startTime ? new Date(chunk.metadata.startTime).toISOString() : 
+                   chunk.metadata?.endTime ? new Date(chunk.metadata.endTime).toISOString() : 
+                   chunk.created_at ? new Date(chunk.created_at).toISOString() : 
+                   now,
         updated_at: now,
         metadata: JSON.stringify(chunk.metadata || {})
       }
