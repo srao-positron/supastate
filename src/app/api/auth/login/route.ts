@@ -1,10 +1,9 @@
 /**
  * Login endpoint for Camille CLI
- * Returns an API key after email/password authentication
+ * Returns JWT tokens after email/password authentication
  */
 
 import { createClient } from '@/lib/supabase/server'
-import { createApiKey } from '@/lib/auth/api-key'
 import { NextResponse } from 'next/server'
 import { log } from '@/lib/logger'
 
@@ -28,51 +27,23 @@ export async function POST(request: Request) {
       password,
     })
     
-    if (authError || !authData.user) {
+    if (authError || !authData.user || !authData.session) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       )
     }
     
-    // Check if user already has a Camille API key
-    const { data: existingKey } = await supabase
-      .from('api_keys')
-      .select('id, name, created_at')
-      .eq('user_id', authData.user.id)
-      .eq('name', 'Camille CLI')
-      .eq('is_active', true)
-      .single()
-    
-    if (existingKey) {
-      // Return existing key info (not the actual key for security)
-      return NextResponse.json({
-        message: 'API key already exists for Camille CLI',
-        keyId: existingKey.id,
-        createdAt: existingKey.created_at,
-        userId: authData.user.id,
-        email: authData.user.email,
-        action: 'existing'
-      })
-    }
-    
-    // Create a new API key
-    const result = await createApiKey(authData.user.id, 'Camille CLI')
-    
-    if (result.error) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: 500 }
-      )
-    }
-    
-    // Return the new API key
+    // Return the JWT tokens and user info
     return NextResponse.json({
-      apiKey: result.apiKey,
+      accessToken: authData.session.access_token,
+      refreshToken: authData.session.refresh_token,
+      expiresIn: authData.session.expires_in,
+      expiresAt: authData.session.expires_at,
       userId: authData.user.id,
       email: authData.user.email,
-      action: 'created',
-      message: 'API key created for Camille CLI'
+      action: 'authenticated',
+      message: 'Successfully authenticated with Supabase'
     })
     
   } catch (error) {

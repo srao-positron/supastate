@@ -28,6 +28,40 @@ serve(async (req) => {
   }
 
   try {
+    // Get the authorization header
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
+
+    // Initialize Supabase client with user's token
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
     // Verify request method
     if (req.method !== 'POST') {
       return new Response('Method not allowed', { 
@@ -46,17 +80,20 @@ serve(async (req) => {
       )
     }
 
-    if (!body.workspaceId || !body.projectName) {
+    // Use authenticated user's workspace
+    const workspaceId = `user:${user.id}`
+    
+    if (!body.projectName) {
       return new Response(
-        JSON.stringify({ error: 'workspaceId and projectName are required' }),
+        JSON.stringify({ error: 'projectName is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
-    console.log(`[Ingest Memory] Processing ${body.chunks.length} chunks for workspace ${body.workspaceId}`)
+    console.log(`[Ingest Memory] Processing ${body.chunks.length} chunks for workspace ${workspaceId}`)
 
-    // Initialize Supabase client
-    const supabaseClient = createClient(
+    // Create service role client for database operations
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
@@ -78,10 +115,10 @@ serve(async (req) => {
         const contentHash = await createHash('sha256').update(chunk.content).digest('hex')
         
         // Check if already processed
-        const { data: existing } = await supabaseClient
+        const { data: existing } = await serviceClient
           .from('processed_memories')
           .select('id')
-          .eq('workspace_id', body.workspaceId)
+          .eq('workspace_id', workspaceId)
           .eq('project_name', body.projectName)
           .eq('content_hash', contentHash)
           .single()
@@ -101,10 +138,10 @@ serve(async (req) => {
         }
 
         // Add to memory queue
-        const { error } = await supabaseClient
+        const { error } = await serviceClient
           .from('memory_queue')
           .upsert({
-            workspace_id: body.workspaceId,
+            workspace_id: workspaceId,
             session_id: chunk.sessionId,
             chunk_id: chunk.chunkId,
             content: chunk.content,

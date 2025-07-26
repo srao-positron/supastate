@@ -75,7 +75,7 @@ serve(async (req, connInfo) => {
       .from('code_processing_tasks')
       .insert({
         id: taskId,
-        workspace_id: body.workspaceId,
+        workspace_id: workspaceId,
         project_name: body.projectName,
         total_files: body.files.length,
         status: 'pending'
@@ -101,7 +101,7 @@ serve(async (req, connInfo) => {
       const { data: existingFile } = await supabase
         .from('code_files')
         .select('id, content_hash')
-        .eq('workspace_id', body.workspaceId)
+        .eq('workspace_id', workspaceId)
         .eq('project_name', body.projectName)
         .eq('path', file.path)
         .single()
@@ -118,7 +118,7 @@ serve(async (req, connInfo) => {
         file_path: file.path,
         content: file.content,
         language: file.language,
-        workspace_id: body.workspaceId,
+        workspace_id: workspaceId,
         project_name: body.projectName,
         git_metadata: file.gitMetadata || null,
         status: 'pending'
@@ -128,7 +128,7 @@ serve(async (req, connInfo) => {
       fileUpdates.push({
         path: file.path,
         project_name: body.projectName,
-        workspace_id: body.workspaceId,
+        workspace_id: workspaceId,
         language: file.language,
         content: file.content,
         content_hash: contentHash,

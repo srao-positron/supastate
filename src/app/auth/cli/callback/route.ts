@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { createApiKey } from '@/lib/auth/api-key'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -43,38 +42,11 @@ export async function GET(request: Request) {
     
     console.log('[CLI Auth Debug] Got user:', { id: user.id, email: user.email })
     
-    // Check if user already has a CLI API key
-    const { data: existingKey } = await supabase
-      .from('api_keys')
-      .select('id, name, created_at')
-      .eq('user_id', user.id)
-      .eq('name', 'Camille CLI')
-      .eq('is_active', true)
-      .single()
-    
-    let apiKey: string
-    let action: string
-    
-    if (existingKey) {
-      // User already has a key - for security, we don't return it
-      // Instead, we'll show a message
-      console.log('[CLI Auth Debug] User already has a Camille CLI key')
-      action = 'existing'
-      apiKey = '' // Don't expose existing keys
-    } else {
-      // Create new API key
-      console.log('[CLI Auth Debug] Creating new API key...')
-      const result = await createApiKey(user.id, 'Camille CLI')
-      
-      if (result.error) {
-        console.error('[CLI Auth Debug] Failed to create API key:', result.error)
-        return NextResponse.redirect(new URL('/auth/login?error=api_key_failed', request.url))
-      }
-      
-      console.log('[CLI Auth Debug] API key created successfully')
-      apiKey = result.apiKey!
-      action = 'created'
-    }
+    // We have the session with JWT tokens
+    const accessToken = authData.session.access_token
+    const refreshToken = authData.session.refresh_token
+    const expiresIn = authData.session.expires_in
+    const expiresAt = authData.session.expires_at
     
     // Return HTML page that sends the API key back to CLI
     const html = `
@@ -115,26 +87,18 @@ export async function GET(request: Request) {
         </head>
         <body>
           <div class="container">
-            ${action === 'created' ? `
-              <h1 class="success">✅ Authentication Successful!</h1>
-              <p>Your API key has been created and sent to Camille CLI.</p>
-              <p>You can close this window and return to your terminal.</p>
-              <div class="code">
-                <strong>If the CLI didn't receive it, run:</strong><br>
-                camille supastate enable --url https://www.supastate.ai --api-key ${apiKey}
-              </div>
-            ` : `
-              <h1 class="error">⚠️ API Key Already Exists</h1>
-              <p>You already have an API key for Camille CLI.</p>
-              <p>For security reasons, we cannot show existing keys.</p>
-              <p>To generate a new key, please revoke the existing one in the Supastate dashboard.</p>
-            `}
+            <h1 class="success">✅ Authentication Successful!</h1>
+            <p>Your authentication tokens have been sent to Camille CLI.</p>
+            <p>You can close this window and return to your terminal.</p>
+            <div class="code">
+              <strong>Session expires at:</strong><br>
+              ${new Date(expiresAt! * 1000).toLocaleString()}
+            </div>
           </div>
-          ${action === 'created' ? `
           <script>
-            // Send API key back to CLI
+            // Send JWT tokens back to CLI
             (async () => {
-              console.log('[CLI Auth Debug] Attempting to send API key to CLI at http://localhost:${port}/cli-callback');
+              console.log('[CLI Auth Debug] Attempting to send tokens to CLI at http://localhost:${port}/cli-callback');
               try {
                 const response = await fetch('http://localhost:${port}/cli-callback', {
                   method: 'POST',
@@ -142,7 +106,10 @@ export async function GET(request: Request) {
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
-                    apiKey: '${apiKey}',
+                    accessToken: '${accessToken}',
+                    refreshToken: '${refreshToken}',
+                    expiresIn: ${expiresIn},
+                    expiresAt: ${expiresAt},
                     userId: '${user.id}',
                     email: '${user.email || ''}',
                   }),
@@ -154,12 +121,11 @@ export async function GET(request: Request) {
               }
             })();
           </script>
-          ` : ''}
         </body>
       </html>
     `
     
-    console.log('[CLI Auth Debug] Returning HTML response with action:', action)
+    console.log('[CLI Auth Debug] Returning HTML response with JWT tokens')
     
     return new NextResponse(html, {
       headers: {
