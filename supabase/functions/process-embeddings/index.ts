@@ -13,6 +13,46 @@ const BATCH_SIZE = 500 // Increased from 100
 const PARALLEL_WORKERS = 20 // Increased from 10
 const MAX_RETRIES = 3
 
+// Extract meaningful memory type from metadata
+function getMemoryType(metadata: any): string {
+  if (!metadata) return 'general'
+  
+  const { hasCode, topics, tools, messageType } = metadata
+  
+  if (messageType && messageType !== 'general') {
+    return messageType
+  }
+  
+  if (hasCode) {
+    if (topics?.includes('debugging') || topics?.includes('error') || topics?.includes('bug')) {
+      return 'debugging'
+    }
+    if (topics?.includes('implementation') || topics?.includes('feature')) {
+      return 'implementation'
+    }
+    if (topics?.includes('refactoring') || topics?.includes('optimization')) {
+      return 'refactoring'
+    }
+    return 'code_discussion'
+  }
+  
+  if (tools?.includes('git') || tools?.includes('github')) {
+    return 'version_control'
+  }
+  if (tools?.includes('test') || tools?.includes('jest')) {
+    return 'testing'
+  }
+  
+  if (topics?.includes('planning') || topics?.includes('requirements')) {
+    return 'planning'
+  }
+  if (topics?.includes('documentation')) {
+    return 'documentation'
+  }
+  
+  return 'general'
+}
+
 // Neo4j connection helper
 let driver: any = null
 
@@ -179,10 +219,10 @@ async function processMemoryBatch(chunks: any[], openai: OpenAI, supabase: any) 
         project_name: projectName,
         user_id: userId || null,
         team_id: teamId || null,
-        type: chunk.metadata?.messageType || 'general',
+        type: chunk.metadata?.messageType || chunk.metadata?.type || 'general',
         chunk_id: chunk.chunk_id || null,
-        session_id: chunk.session_id || null,
-        created_at: chunk.created_at || now,
+        session_id: chunk.session_id || chunk.metadata?.sessionId || null,
+        created_at: chunk.metadata?.startTime || chunk.metadata?.endTime || chunk.created_at || now,
         updated_at: now,
         metadata: JSON.stringify(chunk.metadata || {})
       }

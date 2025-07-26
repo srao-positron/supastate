@@ -205,7 +205,7 @@ ${entity.content.substring(0, 4000)}`
         workspace_id: file.workspace_id,
         project_name: file.project_name,
         git_metadata: JSON.stringify(file.git_metadata || {}),
-        last_modified: new Date().toISOString()
+        last_modified: file.last_modified || new Date().toISOString()
       })
 
       // Create entity nodes
@@ -233,7 +233,7 @@ ${entity.content.substring(0, 4000)}`
             file_id: $file_id,
             project_name: $project_name,
             workspace_id: $workspace_id,
-            created_at: datetime()
+            created_at: datetime($last_modified)
           })
           WITH n
           MATCH (f:CodeFile {id: $file_id})
@@ -252,7 +252,8 @@ ${entity.content.substring(0, 4000)}`
           metadata: JSON.stringify(entity.metadata),
           file_id: fileId,
           project_name: file.project_name,
-          workspace_id: file.workspace_id
+          workspace_id: file.workspace_id,
+          last_modified: file.last_modified || new Date().toISOString()
         })
       }
 
@@ -283,7 +284,7 @@ ${entity.content.substring(0, 4000)}`
               id: randomUUID(),
               targetName: $targetName,
               type: $type,
-              created_at: datetime()
+              created_at: datetime($last_modified)
             })
           `, {
             fromId: rel.fromId,
