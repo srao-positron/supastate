@@ -68,10 +68,8 @@ export async function POST(request: NextRequest) {
     
     const result = await response.json()
     
-    return NextResponse.json({
-      success: true,
-      ...result
-    })
+    // Pass through the response from edge function
+    return NextResponse.json(result)
     
   } catch (error) {
     console.error('Error linking memories to code:', error)

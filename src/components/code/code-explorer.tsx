@@ -119,10 +119,19 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
       if (!response.ok) throw new Error('Failed to link memories')
 
       const result = await response.json()
-      toast({
-        title: 'Success',
-        description: `Linked ${result.processed || 0} memories to code entities`
-      })
+      
+      if (result.status === 'processing') {
+        toast({
+          title: 'Linking Started',
+          description: 'Memory-code linking is running in the background. This may take a few minutes.'
+        })
+      } else {
+        // Fallback for synchronous processing
+        toast({
+          title: 'Success',
+          description: `Linked ${result.processed || 0} memories to code entities`
+        })
+      }
     } catch (error) {
       console.error('Error linking memories:', error)
       toast({

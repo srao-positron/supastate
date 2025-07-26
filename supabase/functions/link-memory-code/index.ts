@@ -166,16 +166,130 @@ async function linkMemoryToCode(
   }
 }
 
-serve(async (req) => {
+async function linkMemoriesBackground(params: LinkingRequest) {
+  const { memoryId, projectName, workspaceId, threshold = 0.7 } = params
+  
+  console.log('[Link Memory-Code] Starting background task with params:', {
+    memoryId,
+    projectName,
+    workspaceId,
+    threshold
+  })
+  
+  const driver = getNeo4jDriver()
+  const openai = new OpenAI({
+    apiKey: Deno.env.get('OPENAI_API_KEY') ?? '',
+  })
+  
+  const session = driver.session()
+  
+  try {
+    // Get memories to process
+    let memoriesQuery = ''
+    let queryParams: Record<string, any> = {}
+    
+    if (memoryId) {
+      memoriesQuery = `
+        MATCH (m:Memory {id: $memoryId})
+        RETURN m.id as id, m.content as content, m.project_name as projectName
+      `
+      queryParams = { memoryId }
+    } else if (projectName) {
+      memoriesQuery = `
+        MATCH (m:Memory {project_name: $projectName})
+        WHERE m.has_code_references IS NULL OR m.has_code_references = false
+        RETURN m.id as id, m.content as content, m.project_name as projectName
+        LIMIT 100
+      `
+      queryParams = { projectName }
+    } else if (workspaceId) {
+      memoriesQuery = `
+        MATCH (m:Memory {workspace_id: $workspaceId})
+        WHERE m.has_code_references IS NULL OR m.has_code_references = false
+        RETURN m.id as id, m.content as content, m.project_name as projectName
+        LIMIT 100
+      `
+      queryParams = { workspaceId }
+    }
+    
+    const result = await session.run(memoriesQuery, queryParams)
+    
+    if (!result.records.length) {
+      console.log('[Link Memory-Code] No memories found to process')
+      return {
+        message: 'No memories found to process',
+        processed: 0
+      }
+    }
+    
+    console.log(`[Link Memory-Code] Processing ${result.records.length} memories for code linking`)
+    
+    let processedCount = 0
+    const errors: any[] = []
+    
+    // Process memories
+    for (const record of result.records) {
+      const memId = record.get('id')
+      const content = record.get('content')
+      const projName = record.get('projectName')
+      
+      try {
+        // Analyze memory content
+        const analysis = await analyzeMemoryContent(content, openai)
+        
+        // Only link if we found code references
+        if (
+          analysis.codeReferences.length > 0 ||
+          analysis.functionCalls.length > 0 ||
+          analysis.classReferences.length > 0 ||
+          analysis.fileReferences.length > 0
+        ) {
+          await linkMemoryToCode(driver, memId, projName, analysis, threshold)
+          processedCount++
+        } else {
+          // Mark as analyzed but no code references found
+          const markSession = driver.session()
+          try {
+            await markSession.run(`
+              MATCH (m:Memory {id: $memoryId})
+              SET m.has_code_references = false,
+                  m.code_linked_at = datetime()
+            `, { memoryId: memId })
+          } finally {
+            await markSession.close()
+          }
+        }
+      } catch (error) {
+        console.error(`[Link Memory-Code] Error processing memory ${memId}:`, error)
+        errors.push({ memoryId: memId, error: error.message })
+      }
+    }
+    
+    console.log(`[Link Memory-Code] Background task completed - Processed: ${processedCount}, Errors: ${errors.length}`)
+    
+    return {
+      message: 'Memory-code linking completed',
+      processed: processedCount,
+      total: result.records.length,
+      errors: errors.length > 0 ? errors : undefined
+    }
+    
+  } finally {
+    await session.close()
+    await driver.close()
+  }
+}
+
+serve(async (req, connInfo) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { memoryId, projectName, workspaceId, threshold = 0.7 } = await req.json() as LinkingRequest
+    const params = await req.json() as LinkingRequest
     
-    if (!memoryId && !projectName && !workspaceId) {
+    if (!params.memoryId && !params.projectName && !params.workspaceId) {
       return new Response(
         JSON.stringify({ error: 'Either memoryId, projectName, or workspaceId is required' }),
         { 
@@ -185,110 +299,37 @@ serve(async (req) => {
       )
     }
     
-    const driver = getNeo4jDriver()
-    const openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY') ?? '',
-    })
-    
-    const session = driver.session()
-    
-    try {
-      // Get memories to process
-      let memoriesQuery = ''
-      let params: Record<string, any> = {}
+    // Use waitUntil for background processing
+    const runtime = connInfo as any
+    if (runtime?.waitUntil) {
+      console.log('[Link Memory-Code] Using waitUntil for background processing')
       
-      if (memoryId) {
-        memoriesQuery = `
-          MATCH (m:Memory {id: $memoryId})
-          RETURN m.id as id, m.content as content, m.project_name as projectName
-        `
-        params = { memoryId }
-      } else if (projectName) {
-        memoriesQuery = `
-          MATCH (m:Memory {project_name: $projectName})
-          WHERE m.has_code_references IS NULL OR m.has_code_references = false
-          RETURN m.id as id, m.content as content, m.project_name as projectName
-          LIMIT 100
-        `
-        params = { projectName }
-      } else if (workspaceId) {
-        memoriesQuery = `
-          MATCH (m:Memory {workspace_id: $workspaceId})
-          WHERE m.has_code_references IS NULL OR m.has_code_references = false
-          RETURN m.id as id, m.content as content, m.project_name as projectName
-          LIMIT 100
-        `
-        params = { workspaceId }
-      }
-      
-      const result = await session.run(memoriesQuery, params)
-      
-      if (!result.records.length) {
-        return new Response(
-          JSON.stringify({ 
-            message: 'No memories found to process',
-            processed: 0
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      
-      console.log(`Processing ${result.records.length} memories for code linking`)
-      
-      let processedCount = 0
-      const errors: any[] = []
-      
-      // Process memories
-      for (const record of result.records) {
-        const memId = record.get('id')
-        const content = record.get('content')
-        const projName = record.get('projectName')
-        
-        try {
-          // Analyze memory content
-          const analysis = await analyzeMemoryContent(content, openai)
-          
-          // Only link if we found code references
-          if (
-            analysis.codeReferences.length > 0 ||
-            analysis.functionCalls.length > 0 ||
-            analysis.classReferences.length > 0 ||
-            analysis.fileReferences.length > 0
-          ) {
-            await linkMemoryToCode(driver, memId, projName, analysis, threshold)
-            processedCount++
-          } else {
-            // Mark as analyzed but no code references found
-            const markSession = driver.session()
-            try {
-              await markSession.run(`
-                MATCH (m:Memory {id: $memoryId})
-                SET m.has_code_references = false,
-                    m.code_linked_at = datetime()
-              `, { memoryId: memId })
-            } finally {
-              await markSession.close()
-            }
-          }
-        } catch (error) {
-          console.error(`Error processing memory ${memId}:`, error)
-          errors.push({ memoryId: memId, error: error.message })
-        }
-      }
-      
-      return new Response(
+      // Return immediately to the client
+      const response = new Response(
         JSON.stringify({
-          message: 'Memory-code linking completed',
-          processed: processedCount,
-          total: result.records.length,
-          errors: errors.length > 0 ? errors : undefined
+          message: 'Memory-code linking task started',
+          status: 'processing'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
       
-    } finally {
-      await session.close()
-      await driver.close()
+      // Process in background
+      runtime.waitUntil(
+        linkMemoriesBackground(params).catch(error => {
+          console.error('[Link Memory-Code] Background task failed:', error)
+        })
+      )
+      
+      return response
+    } else {
+      // Fallback for local development - process synchronously
+      console.log('[Link Memory-Code] No waitUntil available, processing synchronously')
+      const result = await linkMemoriesBackground(params)
+      
+      return new Response(
+        JSON.stringify(result),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
     
   } catch (error) {
