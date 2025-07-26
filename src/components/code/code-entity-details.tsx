@@ -24,12 +24,18 @@ interface CodeEntity {
   projectName: string
 }
 
-interface Memory {
+interface LinkedMemory {
   id: string
   chunkId: string
   content: string
   metadata?: any
   similarity?: number
+  relationshipType?: string
+  referenceText?: string
+  linkedAt?: string
+  createdAt?: string
+  type?: string
+  isNameMatch?: boolean
 }
 
 interface CodeEntityDetailsProps {
@@ -39,25 +45,31 @@ interface CodeEntityDetailsProps {
 }
 
 export function CodeEntityDetails({ entity, isOpen, onClose }: CodeEntityDetailsProps) {
-  const [linkedMemories, setLinkedMemories] = useState<Memory[]>([])
+  const [linkedMemories, setLinkedMemories] = useState<LinkedMemory[]>([])
   const [loadingMemories, setLoadingMemories] = useState(false)
 
   useEffect(() => {
-    if (entity) {
+    if (entity && isOpen) {
       fetchLinkedMemories()
     }
-  }, [entity])
+  }, [entity, isOpen])
 
   const fetchLinkedMemories = async () => {
     if (!entity) return
     
     try {
       setLoadingMemories(true)
-      // TODO: Add API endpoint to fetch memories linked to specific code entity
-      // For now, we'll just set empty array
-      setLinkedMemories([])
+      const response = await fetch(`/api/code/${entity.id}/linked-memories`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch linked memories')
+      }
+      
+      const data = await response.json()
+      setLinkedMemories(data.memories || [])
     } catch (error) {
       console.error('Failed to fetch linked memories:', error)
+      setLinkedMemories([])
     } finally {
       setLoadingMemories(false)
     }
@@ -185,16 +197,51 @@ export function CodeEntityDetails({ entity, isOpen, onClose }: CodeEntityDetails
                       className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <Brain className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                        {memory.similarity && (
+                        <div className="flex items-center gap-2">
+                          <Brain className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          {memory.relationshipType && (
+                            <Badge variant="secondary" className="text-xs">
+                              {memory.relationshipType === 'REFERENCES_CODE' ? 'Code Ref' :
+                               memory.relationshipType === 'REFERENCES_FILE' ? 'File Ref' :
+                               memory.relationshipType === 'NAME_MATCH' ? 'Name Match' :
+                               'Semantic'}
+                            </Badge>
+                          )}
+                        </div>
+                        {memory.similarity !== undefined && (
                           <Badge variant="outline" className="text-xs">
                             {Math.round(memory.similarity * 100)}% match
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-3">
+                      
+                      <p className="text-sm text-foreground line-clamp-4 mb-2">
                         {memory.content}
                       </p>
+                      
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        {memory.referenceText && (
+                          <span className="font-mono bg-muted px-1 rounded">
+                            {memory.referenceText}
+                          </span>
+                        )}
+                        {memory.createdAt && (
+                          <span>
+                            {new Date(memory.createdAt).toLocaleDateString()}
+                          </span>
+                        )}
+                        {memory.type && (
+                          <Badge variant="outline" className="text-xs">
+                            {memory.type}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {memory.isNameMatch && (
+                        <p className="text-xs text-muted-foreground mt-2 italic">
+                          This memory mentions "{entity.name}" but hasn't been explicitly linked yet
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
