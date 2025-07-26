@@ -24,11 +24,24 @@ interface CodeIngestionRequest {
   fullSync?: boolean
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 serve(async (req, connInfo) => {
+  // Handle CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     // Verify request method
     if (req.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 })
+      return new Response('Method not allowed', { 
+        status: 405,
+        headers: corsHeaders 
+      })
     }
 
     // Parse request body
@@ -37,14 +50,14 @@ serve(async (req, connInfo) => {
     if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No files provided' }),
-        { headers: { 'Content-Type': 'application/json' }, status: 400 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
     if (!body.workspaceId || !body.projectName) {
       return new Response(
         JSON.stringify({ error: 'workspaceId and projectName are required' }),
-        { headers: { 'Content-Type': 'application/json' }, status: 400 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
@@ -72,7 +85,7 @@ serve(async (req, connInfo) => {
       console.error('[Ingest Code] Failed to create processing task:', taskError)
       return new Response(
         JSON.stringify({ error: 'Failed to create processing task' }),
-        { headers: { 'Content-Type': 'application/json' }, status: 500 }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
 
@@ -135,7 +148,7 @@ serve(async (req, connInfo) => {
         console.error('[Ingest Code] Failed to queue files:', queueError)
         return new Response(
           JSON.stringify({ error: 'Failed to queue files for processing' }),
-          { headers: { 'Content-Type': 'application/json' }, status: 500 }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
         )
       }
 
@@ -192,7 +205,7 @@ serve(async (req, connInfo) => {
           : 'No files needed processing'
       }),
       { 
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
       }
     )
