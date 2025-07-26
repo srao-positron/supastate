@@ -142,17 +142,32 @@ export async function GET(request: Request) {
 
       const result = await session.run(query, queryParams)
 
-      const entities = result.records.map((record: any) => {
+      const entities = result.records.map((record: any, index: number) => {
         const entity = record.get('e')
         const file = record.get('f')
+        
+        // Debug first entity to understand data types
+        if (index === 0) {
+          console.log('[Code API] First entity debug:', {
+            line_start: entity.properties.line_start,
+            line_start_type: typeof entity.properties.line_start,
+            has_toNumber: entity.properties.line_start && typeof entity.properties.line_start.toNumber === 'function',
+            line_end: entity.properties.line_end,
+            line_end_type: typeof entity.properties.line_end,
+          })
+        }
         
         return {
           id: entity.properties.id,
           name: entity.properties.name,
           type: entity.properties.type,
           signature: entity.properties.signature,
-          lineStart: entity.properties.line_start ? entity.properties.line_start.toNumber() : null,
-          lineEnd: entity.properties.line_end ? entity.properties.line_end.toNumber() : null,
+          lineStart: entity.properties.line_start && typeof entity.properties.line_start.toNumber === 'function' 
+            ? entity.properties.line_start.toNumber() 
+            : entity.properties.line_start || null,
+          lineEnd: entity.properties.line_end && typeof entity.properties.line_end.toNumber === 'function'
+            ? entity.properties.line_end.toNumber()
+            : entity.properties.line_end || null,
           metadata: entity.properties.metadata ? JSON.parse(entity.properties.metadata) : {},
           file: file ? {
             id: file.properties.id,
@@ -293,8 +308,12 @@ export async function POST(request: Request) {
             name: record.get('e').properties.name,
             type: record.get('e').properties.type,
             signature: record.get('e').properties.signature,
-            lineStart: record.get('e').properties.line_start ? record.get('e').properties.line_start.toNumber() : null,
-            lineEnd: record.get('e').properties.line_end ? record.get('e').properties.line_end.toNumber() : null,
+            lineStart: record.get('e').properties.line_start && typeof record.get('e').properties.line_start.toNumber === 'function'
+              ? record.get('e').properties.line_start.toNumber()
+              : record.get('e').properties.line_start || null,
+            lineEnd: record.get('e').properties.line_end && typeof record.get('e').properties.line_end.toNumber === 'function'
+              ? record.get('e').properties.line_end.toNumber()
+              : record.get('e').properties.line_end || null,
             projectName: record.get('e').properties.project_name,
           },
           file: record.get('f') ? {
@@ -332,8 +351,12 @@ export async function POST(request: Request) {
             name: record.get('e').properties.name,
             type: record.get('e').properties.type,
             signature: record.get('e').properties.signature,
-            lineStart: record.get('e').properties.line_start ? record.get('e').properties.line_start.toNumber() : null,
-            lineEnd: record.get('e').properties.line_end ? record.get('e').properties.line_end.toNumber() : null,
+            lineStart: record.get('e').properties.line_start && typeof record.get('e').properties.line_start.toNumber === 'function'
+              ? record.get('e').properties.line_start.toNumber()
+              : record.get('e').properties.line_start || null,
+            lineEnd: record.get('e').properties.line_end && typeof record.get('e').properties.line_end.toNumber === 'function'
+              ? record.get('e').properties.line_end.toNumber()
+              : record.get('e').properties.line_end || null,
             projectName: record.get('e').properties.project_name,
           },
           file: record.get('f') ? {
