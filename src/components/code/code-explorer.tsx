@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
+import { CodeEntityDetails } from './code-entity-details'
 import { 
   Code, 
   FileCode, 
@@ -52,6 +53,8 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
   const [offset, setOffset] = useState(0)
   const [isLinking, setIsLinking] = useState(false)
   const [currentProject, setCurrentProject] = useState<string>('')
+  const [selectedEntity, setSelectedEntity] = useState<CodeEntity | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const limit = 50
   const { toast } = useToast()
 
@@ -192,6 +195,11 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
     }
   }
 
+  const handleEntityClick = (entity: CodeEntity) => {
+    setSelectedEntity(entity)
+    setDetailsOpen(true)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2">
@@ -275,7 +283,11 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
         <>
           <div className="grid gap-2">
             {entities.map((entity) => (
-              <Card key={entity.id} className="hover:bg-muted/50 transition-colors cursor-pointer">
+              <Card 
+                key={entity.id} 
+                className="hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => handleEntityClick(entity)}
+              >
                 <CardContent className="py-3">
                   <div className="flex items-start gap-3">
                     <div className={`p-2 rounded-lg ${getEntityColor(entity.type)}`}>
@@ -343,6 +355,12 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
           )}
         </>
       )}
+
+      <CodeEntityDetails
+        entity={selectedEntity}
+        isOpen={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
     </div>
   )
 }
