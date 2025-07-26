@@ -17,7 +17,9 @@ import {
   FileType,
   Braces,
   Component,
-  Import
+  Import,
+  Link,
+  Loader2
 } from 'lucide-react'
 
 interface CodeEntity {
@@ -48,6 +50,8 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
   const [typeCounts, setTypeCounts] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
+  const [isLinking, setIsLinking] = useState(false)
+  const [currentProject, setCurrentProject] = useState<string>('')
   const limit = 50
   const { toast } = useToast()
 
@@ -71,6 +75,11 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
       setEntities(data.entities)
       setTypeCounts(data.typeCounts)
       setTotal(data.total)
+      
+      // Extract project name from entities if available
+      if (data.entities.length > 0 && data.entities[0].projectName) {
+        setCurrentProject(data.entities[0].projectName)
+      }
     } catch (error) {
       console.error('Error fetching code entities:', error)
       toast({
@@ -80,6 +89,46 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const linkMemoriesToCode = async () => {
+    if (!currentProject) {
+      toast({
+        title: 'Error',
+        description: 'No project selected',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      setIsLinking(true)
+      const response = await fetch('/api/code/link-memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: currentProject,
+          threshold: 0.7
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to link memories')
+
+      const result = await response.json()
+      toast({
+        title: 'Success',
+        description: `Linked ${result.processed || 0} memories to code entities`
+      })
+    } catch (error) {
+      console.error('Error linking memories:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to link memories to code',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsLinking(false)
     }
   }
 
@@ -145,37 +194,65 @@ export function CodeExplorer({ projectName }: CodeExplorerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search code entities..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && searchCode()}
-            className="pl-10"
-          />
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search code entities..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && searchCode()}
+              className="pl-10"
+            />
+          </div>
+          <Select value={selectedType} onValueChange={setSelectedType}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {Object.entries(typeCounts).map(([type, count]) => (
+                <SelectItem key={type} value={type}>
+                  <div className="flex items-center gap-2">
+                    {getEntityIcon(type)}
+                    <span className="capitalize">{type}</span>
+                    <span className="text-muted-foreground">({count})</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={searchCode} size="icon">
+            <Search className="h-4 w-4" />
+          </Button>
         </div>
-        <Select value={selectedType} onValueChange={setSelectedType}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {Object.entries(typeCounts).map(([type, count]) => (
-              <SelectItem key={type} value={type}>
-                <div className="flex items-center gap-2">
-                  {getEntityIcon(type)}
-                  <span className="capitalize">{type}</span>
-                  <span className="text-muted-foreground">({count})</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button onClick={searchCode} size="icon">
-          <Search className="h-4 w-4" />
-        </Button>
+        
+        {currentProject && (
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Project: <span className="font-medium">{currentProject}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={linkMemoriesToCode}
+              disabled={isLinking}
+            >
+              {isLinking ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Linking...
+                </>
+              ) : (
+                <>
+                  <Link className="h-4 w-4 mr-2" />
+                  Link Memories to Code
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
 
       {loading ? (
