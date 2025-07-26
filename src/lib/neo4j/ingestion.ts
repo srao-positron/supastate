@@ -115,6 +115,8 @@ export class IngestionService {
     topics?: string[]
     entities_mentioned?: string[]
     tools_used?: string[]
+    created_at?: string
+    occurred_at?: string
   }, options: {
     useInferenceEngine?: boolean
     inferEvolution?: boolean
@@ -129,7 +131,8 @@ export class IngestionService {
       ...memory,
       id: memory.id || crypto.randomUUID(),
       embedding: memory.embedding,
-      created_at: new Date().toISOString(),
+      created_at: memory.created_at || new Date().toISOString(),
+      occurred_at: memory.occurred_at || memory.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
     
@@ -201,6 +204,7 @@ export class IngestionService {
         m.type = $type,
         m.chunk_id = $chunk_id,
         m.created_at = $created_at,
+        m.occurred_at = $occurred_at,
         m.updated_at = $updated_at,
         m.metadata = $metadata
       ON MATCH SET
@@ -211,6 +215,7 @@ export class IngestionService {
         m.team_id = $team_id,
         m.type = $type,
         m.chunk_id = $chunk_id,
+        m.occurred_at = $occurred_at,
         m.updated_at = $updated_at,
         m.metadata = $metadata
       RETURN m
@@ -226,6 +231,7 @@ export class IngestionService {
       type: data.type || 'general',
       chunk_id: data.chunk_id || null,
       created_at: data.created_at,
+      occurred_at: (data as any).occurred_at || data.created_at,
       updated_at: data.updated_at,
       metadata: JSON.stringify(data.metadata || {})
     }
@@ -257,6 +263,7 @@ export class IngestionService {
       type: node.type,
       chunk_id: node.chunk_id,
       created_at: node.created_at,
+      occurred_at: node.occurred_at,
       updated_at: node.updated_at,
       metadata: node.metadata ? JSON.parse(node.metadata) : {}
     } as MemoryNode

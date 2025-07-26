@@ -295,7 +295,8 @@ ${entity.content.substring(0, 4000)}`
             type: rel.type,
             line: rel.properties.line || 0,
             fileId: fileId,
-            projectName: file.project_name
+            projectName: file.project_name,
+            last_modified: file.last_modified || new Date().toISOString()
           })
         }
       }

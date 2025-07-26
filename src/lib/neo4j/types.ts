@@ -8,6 +8,7 @@ export interface MemoryNode {
   user_id?: string
   team_id?: string
   created_at: string
+  occurred_at: string
   updated_at: string
   type?: string
   understanding_level?: number

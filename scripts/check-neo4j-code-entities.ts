@@ -18,16 +18,35 @@ async function checkNeo4jCodeEntities() {
   try {
     console.log('Checking code entities in Neo4j...\n')
 
-    // Get count of entities
-    const countResult = await session.run(`
+    // Check all node labels
+    const labelsResult = await session.run(`
+      CALL db.labels() YIELD label
+      RETURN label
+      ORDER BY label
+    `)
+    console.log('All node labels in database:')
+    labelsResult.records.forEach(record => {
+      console.log(`  - ${record.get('label')}`)
+    })
+    console.log()
+
+    // Get count of CodeEntity nodes
+    const codeEntityCount = await session.run(`
+      MATCH (e:CodeEntity)
+      RETURN COUNT(e) as total
+    `)
+    console.log(`Total CodeEntity nodes: ${codeEntityCount.records[0].get('total')}`)
+
+    // Get count of Entity nodes
+    const entityCount = await session.run(`
       MATCH (e:Entity)
       RETURN COUNT(e) as total
     `)
-    console.log(`Total entities: ${countResult.records[0].get('total')}`)
+    console.log(`Total Entity nodes: ${entityCount.records[0].get('total')}`)
 
-    // Get sample of entities
+    // Get sample of CodeEntity nodes
     const result = await session.run(`
-      MATCH (e:Entity)
+      MATCH (e:CodeEntity)
       RETURN e, properties(e) as props
       LIMIT 10
     `)
@@ -48,9 +67,9 @@ async function checkNeo4jCodeEntities() {
       console.log()
     })
 
-    // Check workspace ID distribution
+    // Check workspace ID distribution for CodeEntity
     const workspaceResult = await session.run(`
-      MATCH (e:Entity)
+      MATCH (e:CodeEntity)
       RETURN e.workspace_id as workspace_id, COUNT(e) as count
       ORDER BY count DESC
     `)
@@ -60,9 +79,9 @@ async function checkNeo4jCodeEntities() {
       console.log(`  ${record.get('workspace_id')}: ${record.get('count')} entities`)
     })
 
-    // Check entity type distribution
+    // Check entity type distribution for CodeEntity
     const typeResult = await session.run(`
-      MATCH (e:Entity)
+      MATCH (e:CodeEntity)
       RETURN e.type as type, COUNT(e) as count
       ORDER BY count DESC
     `)
@@ -74,10 +93,10 @@ async function checkNeo4jCodeEntities() {
 
     // Check linked entities
     const linkedResult = await session.run(`
-      MATCH (e:Entity)-[:RELATED_TO]->(m:Memory)
+      MATCH (e:CodeEntity)-[:RELATED_TO]->(m:Memory)
       RETURN COUNT(DISTINCT e) as linkedCount
     `)
-    console.log(`\nLinked entities: ${linkedResult.records[0].get('linkedCount')}`)
+    console.log(`\nLinked CodeEntity nodes: ${linkedResult.records[0].get('linkedCount')}`)
 
   } finally {
     await session.close()

@@ -130,7 +130,9 @@ async function migrateToNeo4j() {
             file_paths: memory.metadata?.filePaths,
             topics: memory.metadata?.topics,
             entities_mentioned: memory.metadata?.entitiesMentioned,
-            tools_used: memory.metadata?.toolsUsed
+            tools_used: memory.metadata?.toolsUsed,
+            created_at: memory.created_at, // Pass the original timestamp
+            occurred_at: memory.metadata?.timestamp || memory.created_at // Use transcript timestamp if available
           }, {
             useInferenceEngine: false // We'll run inference in batch later
           })

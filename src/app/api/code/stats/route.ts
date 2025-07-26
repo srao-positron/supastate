@@ -32,19 +32,20 @@ export async function GET(request: NextRequest) {
 
     // Get code entity stats
     const result = await session.run(`
-      MATCH (e:Entity)
+      MATCH (e:CodeEntity)
       WHERE (e.workspace_id = $workspaceId 
              OR e.workspace_id = $userWorkspaceId
              OR e.user_id = $userId 
              OR e.team_id = $teamId)
-      WITH e
+      OPTIONAL MATCH (e)-[:DEFINED_IN]->(f:CodeFile)
+      WITH e, f
       RETURN 
         COUNT(DISTINCT e) as totalEntities,
-        COUNT(DISTINCT e.file_path) as totalFiles,
-        COUNT(DISTINCT e.project_path) as totalProjects,
+        COUNT(DISTINCT f.path) as totalFiles,
+        COUNT(DISTINCT e.project_name) as totalProjects,
         COLLECT(DISTINCT e.type) as entityTypes
       UNION
-      MATCH (e:Entity)-[:RELATED_TO]->(m:Memory)
+      MATCH (e:CodeEntity)-[:RELATED_TO]->(m:Memory)
       WHERE (e.workspace_id = $workspaceId 
              OR e.workspace_id = $userWorkspaceId
              OR e.user_id = $userId 
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     // Get entity type distribution
     const typeResult = await session.run(`
-      MATCH (e:Entity)
+      MATCH (e:CodeEntity)
       WHERE (e.workspace_id = $workspaceId 
              OR e.workspace_id = $userWorkspaceId
              OR e.user_id = $userId 
