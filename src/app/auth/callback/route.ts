@@ -21,12 +21,14 @@ export async function GET(request: Request) {
       if (cliSession.isCli === true && cliSession.timestamp && (Date.now() - cliSession.timestamp) < 600000) {
         isCli = true
         port = cliSession.port || '8899'
-        // Delete the cookie after reading
-        cookieStore.delete('cli_auth_session')
       }
     } catch (e) {
       console.error('[Auth Callback] Failed to parse CLI session cookie:', e)
     }
+    
+    // Always delete the cookie after checking it, regardless of validity
+    // This ensures we don't affect future non-CLI logins
+    cookieStore.delete('cli_auth_session')
   }
 
   console.log('[Auth Callback] Received callback:', {
