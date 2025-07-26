@@ -61,7 +61,7 @@ export default function GraphPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-[calc(100vh-3.5rem)] bg-gray-50">
       {/* Left sidebar - Controls */}
       <div className="w-80 bg-white shadow-lg overflow-y-auto">
         <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">

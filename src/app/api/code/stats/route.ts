@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Neo4j from 'neo4j-driver'
 
-const neo4jUri = process.env.NEO4J_URI || 'bolt://localhost:7687'
+const neo4jUri = process.env.NEO4J_URI || 'neo4j+s://eb61aceb.databases.neo4j.io'
 const neo4jUser = process.env.NEO4J_USER || 'neo4j'
-const neo4jPassword = process.env.NEO4J_PASSWORD || 'password'
+const neo4jPassword = process.env.NEO4J_PASSWORD || ''
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         COUNT(DISTINCT e.project_name) as totalProjects,
         COLLECT(DISTINCT e.type) as entityTypes
       UNION
-      MATCH (e:CodeEntity)-[:RELATED_TO]->(m:Memory)
+      MATCH (e:CodeEntity)<-[:REFERENCES_CODE]-(m:Memory)
       WHERE (e.workspace_id = $workspaceId 
              OR e.workspace_id = $userWorkspaceId
              OR e.user_id = $userId 

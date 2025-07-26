@@ -211,32 +211,28 @@ function generateMockGraphData(): GraphData {
 }
 
 export async function getGraphData(): Promise<GraphData> {
-  const supabase = createClient();
-  
   try {
-    // Try to fetch from Supabase first
-    const { data: graphData, error } = await supabase
-      .from('code_graphs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (!error && graphData) {
-      return graphData.data as GraphData;
-    }
-
-    // If no data in Supabase, generate mock data
-    const mockData = generateMockGraphData();
-    
-    // Store in Supabase for future use
-    await supabase.from('code_graphs').insert({
-      data: mockData,
-      repository: 'supastate',
-      branch: 'main',
+    // Fetch real code graph data from Neo4j
+    const response = await fetch('/api/graph/code', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
 
-    return mockData;
+    if (!response.ok) {
+      throw new Error('Failed to fetch graph data');
+    }
+
+    const data = await response.json();
+    
+    // If no data from Neo4j, use mock data as fallback
+    if (!data.nodes || data.nodes.length === 0) {
+      console.log('No code entities found, using mock data');
+      return generateMockGraphData();
+    }
+
+    return data;
   } catch (error) {
     console.error('Error fetching graph data:', error);
     // Return mock data as fallback

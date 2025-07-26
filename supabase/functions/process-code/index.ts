@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://deno.land/x/openai@v4.20.1/mod.ts'
 import neo4j from 'https://unpkg.com/neo4j-driver@5.12.0/lib/browser/neo4j-web.esm.js'
 import ts from 'https://esm.sh/typescript@5.3.3'
+import { crypto } from 'https://deno.land/std@0.168.0/crypto/mod.ts'
 import { EnhancedTypeScriptParser } from './enhanced-parser.ts'
 import { SimpleTypeScriptParser } from './simple-parser.ts'
 import { PythonParser } from './python-parser.ts'
@@ -59,6 +60,33 @@ interface Relationship {
   properties?: Record<string, any>
 }
 
+// Generate a deterministic hash for code entity content
+async function generateContentHash(entity: {
+  name: string
+  type: string
+  content: string
+  signature?: string
+  file_path: string
+}): Promise<string> {
+  // Create a normalized representation for hashing
+  const normalized = JSON.stringify({
+    name: entity.name.trim(),
+    type: entity.type,
+    // Normalize content by removing extra whitespace and comments
+    content: entity.content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').replace(/\s+/g, ' ').trim(),
+    signature: entity.signature?.replace(/\s+/g, ' ').trim() || '',
+    // Include file path to distinguish same-named entities in different files
+    file_path: entity.file_path
+  })
+  
+  // Use Web Crypto API to generate hash
+  const encoder = new TextEncoder()
+  const data = encoder.encode(normalized)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  return hashHex
+}
 
 // Process a single code file
 async function processCodeFile(file: any, supabase: any, openai: OpenAI) {
@@ -208,8 +236,17 @@ ${entity.content.substring(0, 4000)}`
         last_modified: file.last_modified || new Date().toISOString()
       })
 
-      // Create entity nodes
+      // Create entity nodes with de-duplication
       for (const entity of entities) {
+        // Generate content hash for de-duplication
+        const contentHash = await generateContentHash({
+          name: entity.name,
+          type: entity.type,
+          content: entity.content,
+          signature: entity.signature,
+          file_path: file.file_path
+        })
+        
         const nodeLabel = entity.type === 'jsx_component' ? 'Component' : 
                          entity.type === 'interface' ? 'Interface' :
                          entity.type === 'type' ? 'TypeDefinition' :
@@ -217,27 +254,66 @@ ${entity.content.substring(0, 4000)}`
                          entity.type === 'method' ? 'Method' :
                          entity.type === 'class' ? 'Class' : 'Function'
         
+        // First check if entity with this hash already exists
+        const existingResult = await session.run(`
+          MATCH (n:CodeEntity {content_hash: $contentHash})
+          RETURN n.id as id, n.file_id as fileId, n.last_modified as lastModified
+        `, { contentHash })
+        
+        if (existingResult.records.length > 0) {
+          // Entity with same content already exists
+          const existing = existingResult.records[0]
+          const existingLastModified = existing.get('lastModified')
+          
+          // Only update if this file is newer
+          if (!existingLastModified || new Date(file.last_modified) > new Date(existingLastModified)) {
+            console.log(`[Process Code] Updating existing entity ${entity.name} with newer version`)
+            await session.run(`
+              MATCH (n:CodeEntity {content_hash: $contentHash})
+              SET n.file_id = $file_id,
+                  n.line_start = $line_start,
+                  n.line_end = $line_end,
+                  n.embedding = $embedding,
+                  n.last_modified = datetime($last_modified),
+                  n.updated_at = datetime()
+              WITH n
+              MATCH (f:CodeFile {id: $file_id})
+              MERGE (n)-[:DEFINED_IN]->(f)
+            `, {
+              contentHash,
+              file_id: fileId,
+              line_start: entity.lineStart,
+              line_end: entity.lineEnd,
+              embedding: entity.embedding || null,
+              last_modified: file.last_modified || new Date().toISOString()
+            })
+          } else {
+            console.log(`[Process Code] Skipping duplicate entity ${entity.name} - existing version is newer or same`)
+          }
+          continue
+        }
+        
+        // Create new entity with content hash
         await session.run(`
-          MERGE (n:${nodeLabel}:CodeEntity {id: $id})
-          ON CREATE SET 
-            n.name = $name,
-            n.type = $type,
-            n.content = $content,
-            n.signature = $signature,
-            n.line_start = $line_start,
-            n.line_end = $line_end,
-            n.column_start = $column_start,
-            n.column_end = $column_end,
-            n.embedding = $embedding,
-            n.metadata = $metadata,
-            n.file_id = $file_id,
-            n.project_name = $project_name,
-            n.workspace_id = $workspace_id,
-            n.created_at = datetime($last_modified)
-          ON MATCH SET
-            n.content = $content,
-            n.embedding = $embedding,
-            n.updated_at = datetime()
+          CREATE (n:${nodeLabel}:CodeEntity {
+            id: $id,
+            name: $name,
+            type: $type,
+            content: $content,
+            content_hash: $contentHash,
+            signature: $signature,
+            line_start: $line_start,
+            line_end: $line_end,
+            column_start: $column_start,
+            column_end: $column_end,
+            embedding: $embedding,
+            metadata: $metadata,
+            file_id: $file_id,
+            project_name: $project_name,
+            workspace_id: $workspace_id,
+            last_modified: datetime($last_modified),
+            created_at: datetime($last_modified)
+          })
           WITH n
           MATCH (f:CodeFile {id: $file_id})
           MERGE (n)-[:DEFINED_IN]->(f)
@@ -246,6 +322,7 @@ ${entity.content.substring(0, 4000)}`
           name: entity.name,
           type: entity.type,
           content: entity.content,
+          contentHash: contentHash,
           signature: entity.signature || null,
           line_start: entity.lineStart,
           line_end: entity.lineEnd,
