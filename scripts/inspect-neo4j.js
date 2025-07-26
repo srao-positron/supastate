@@ -1,11 +1,11 @@
-import dotenv from 'dotenv';
-import path from 'path';
+const dotenv = require('dotenv');
+const path = require('path');
 
 // Load environment variables
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('Missing required environment variables');
@@ -51,6 +51,14 @@ async function inspectNeo4j() {
         ORDER BY f.updated_at DESC
         LIMIT 10
       `
+    },
+    {
+      name: 'Test project entities',
+      query: `
+        MATCH (n:CodeEntity {project_name: 'test-project'})
+        RETURN n.name as name, n.type as type, n.line_start as line
+        ORDER BY n.line_start
+      `
     }
   ];
   
@@ -85,11 +93,11 @@ async function inspectNeo4j() {
     }
   }
   
-  // Also check processing queue
-  console.log('\n=== Recent Processing Queue Items ===');
-  const { createClient } = await import('@supabase/supabase-js');
+  // Also check processing queue using supabase client
+  const { createClient } = require('@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   
+  console.log('\n=== Recent Processing Queue Items ===');
   const { data: queue } = await supabase
     .from('code_processing_queue')
     .select('file_path, status, error, created_at, processed_at')
@@ -104,4 +112,3 @@ async function inspectNeo4j() {
 }
 
 inspectNeo4j().catch(console.error);
-EOF < /dev/null

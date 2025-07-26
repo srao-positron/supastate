@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import OpenAI from 'https://deno.land/x/openai@v4.20.1/mod.ts'
 import neo4j from 'https://unpkg.com/neo4j-driver@5.12.0/lib/browser/neo4j-web.esm.js'
 import ts from 'https://esm.sh/typescript@5.3.3'
+import { EnhancedTypeScriptParser } from './enhanced-parser.ts'
+import { SimpleTypeScriptParser } from './simple-parser.ts'
 
 const BATCH_SIZE = 50
 const PARALLEL_WORKERS = 10
@@ -56,280 +58,6 @@ interface Relationship {
   properties?: Record<string, any>
 }
 
-// TypeScript Parser
-class TypeScriptParser {
-  parse(content: string, filePath: string): { entities: CodeEntity[], relationships: Relationship[] } {
-    const entities: CodeEntity[] = []
-    const relationships: Relationship[] = []
-    
-    const sourceFile = ts.createSourceFile(
-      filePath,
-      content,
-      ts.ScriptTarget.Latest,
-      true
-    )
-
-    const visit = (node: ts.Node) => {
-      // Functions
-      if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
-        const name = (node as any).name?.getText() || 'anonymous'
-        const entity: CodeEntity = {
-          id: crypto.randomUUID(),
-          type: 'function',
-          name,
-          signature: this.getFunctionSignature(node as any),
-          content: node.getText(),
-          lineStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-          lineEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-          columnStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).character,
-          columnEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).character,
-          metadata: {
-            isAsync: (node as any).modifiers?.some((m: any) => m.kind === ts.SyntaxKind.AsyncKeyword),
-            isExported: (node as any).modifiers?.some((m: any) => m.kind === ts.SyntaxKind.ExportKeyword),
-            parameters: this.getParameters(node as any),
-            returnType: this.getReturnType(node as any)
-          }
-        }
-        entities.push(entity)
-
-        // Extract function calls
-        this.extractFunctionCalls(node, entity.id, relationships, sourceFile)
-      }
-
-      // Classes
-      if (ts.isClassDeclaration(node)) {
-        const name = node.name?.getText() || 'anonymous'
-        const entity: CodeEntity = {
-          id: crypto.randomUUID(),
-          type: 'class',
-          name,
-          content: node.getText(),
-          lineStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-          lineEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-          metadata: {
-            isExported: node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword),
-            isAbstract: node.modifiers?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword),
-            extends: this.getExtends(node),
-            implements: this.getImplements(node)
-          }
-        }
-        entities.push(entity)
-
-        // Process class members
-        node.members.forEach(member => {
-          if (ts.isMethodDeclaration(member)) {
-            const methodEntity: CodeEntity = {
-              id: crypto.randomUUID(),
-              type: 'method',
-              name: member.name?.getText() || 'anonymous',
-              signature: this.getMethodSignature(member),
-              content: member.getText(),
-              lineStart: sourceFile.getLineAndCharacterOfPosition(member.getStart()).line + 1,
-              lineEnd: sourceFile.getLineAndCharacterOfPosition(member.getEnd()).line + 1,
-              metadata: {
-                isStatic: member.modifiers?.some(m => m.kind === ts.SyntaxKind.StaticKeyword),
-                isPrivate: member.modifiers?.some(m => m.kind === ts.SyntaxKind.PrivateKeyword),
-                isProtected: member.modifiers?.some(m => m.kind === ts.SyntaxKind.ProtectedKeyword),
-                isAsync: member.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword),
-                classId: entity.id
-              }
-            }
-            entities.push(methodEntity)
-            
-            relationships.push({
-              fromId: methodEntity.id,
-              toId: entity.id,
-              type: 'BELONGS_TO'
-            })
-          }
-        })
-      }
-
-      // Interfaces
-      if (ts.isInterfaceDeclaration(node)) {
-        const entity: CodeEntity = {
-          id: crypto.randomUUID(),
-          type: 'interface',
-          name: node.name.getText(),
-          content: node.getText(),
-          lineStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-          lineEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-          metadata: {
-            isExported: node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)
-          }
-        }
-        entities.push(entity)
-      }
-
-      // Type aliases
-      if (ts.isTypeAliasDeclaration(node)) {
-        const entity: CodeEntity = {
-          id: crypto.randomUUID(),
-          type: 'type',
-          name: node.name.getText(),
-          content: node.getText(),
-          lineStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-          lineEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-          metadata: {
-            isExported: node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)
-          }
-        }
-        entities.push(entity)
-      }
-
-      // Imports
-      if (ts.isImportDeclaration(node)) {
-        const entity: CodeEntity = {
-          id: crypto.randomUUID(),
-          type: 'import',
-          name: 'import',
-          content: node.getText(),
-          lineStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-          lineEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-          metadata: {
-            source: node.moduleSpecifier.getText().replace(/['"]/g, ''),
-            imports: this.getImportedItems(node)
-          }
-        }
-        entities.push(entity)
-      }
-
-      // JSX Components (simplified detection)
-      if (ts.isVariableDeclaration(node) && node.initializer) {
-        const name = node.name.getText()
-        if (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) {
-          const returnType = this.checkReturnsJSX(node.initializer)
-          if (returnType) {
-            const entity: CodeEntity = {
-              id: crypto.randomUUID(),
-              type: 'jsx_component',
-              name,
-              content: node.getText(),
-              lineStart: sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-              lineEnd: sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
-              metadata: {
-                isExported: false, // Will be determined by parent
-                props: this.getComponentProps(node.initializer)
-              }
-            }
-            entities.push(entity)
-          }
-        }
-      }
-
-      ts.forEachChild(node, visit)
-    }
-
-    visit(sourceFile)
-    return { entities, relationships }
-  }
-
-  private getFunctionSignature(node: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction): string {
-    const name = (node as any).name?.getText() || 'anonymous'
-    const params = node.parameters.map(p => p.getText()).join(', ')
-    return `${name}(${params})`
-  }
-
-  private getMethodSignature(node: ts.MethodDeclaration): string {
-    const name = node.name?.getText() || 'anonymous'
-    const params = node.parameters.map(p => p.getText()).join(', ')
-    return `${name}(${params})`
-  }
-
-  private getParameters(node: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration): any[] {
-    return node.parameters.map(p => ({
-      name: p.name?.getText(),
-      type: p.type?.getText(),
-      optional: p.questionToken !== undefined,
-      initializer: p.initializer?.getText()
-    }))
-  }
-
-  private getReturnType(node: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration): string | undefined {
-    return node.type?.getText()
-  }
-
-  private getExtends(node: ts.ClassDeclaration): string | undefined {
-    if (node.heritageClauses) {
-      const extendsClause = node.heritageClauses.find(
-        clause => clause.token === ts.SyntaxKind.ExtendsKeyword
-      )
-      return extendsClause?.types[0]?.getText()
-    }
-    return undefined
-  }
-
-  private getImplements(node: ts.ClassDeclaration): string[] {
-    if (node.heritageClauses) {
-      const implementsClause = node.heritageClauses.find(
-        clause => clause.token === ts.SyntaxKind.ImplementsKeyword
-      )
-      return implementsClause?.types.map(t => t.getText()) || []
-    }
-    return []
-  }
-
-  private getImportedItems(node: ts.ImportDeclaration): any {
-    const clause = node.importClause
-    if (!clause) return { type: 'side-effect' }
-
-    const items: any = {}
-    
-    if (clause.name) {
-      items.default = clause.name.getText()
-    }
-    
-    if (clause.namedBindings) {
-      if (ts.isNamespaceImport(clause.namedBindings)) {
-        items.namespace = clause.namedBindings.name.getText()
-      } else if (ts.isNamedImports(clause.namedBindings)) {
-        items.named = clause.namedBindings.elements.map(e => ({
-          name: e.name.getText(),
-          alias: e.propertyName?.getText()
-        }))
-      }
-    }
-    
-    return items
-  }
-
-  private checkReturnsJSX(node: ts.ArrowFunction | ts.FunctionExpression): boolean {
-    // Simplified check - in real implementation, would traverse AST
-    const text = node.getText()
-    return text.includes('return <') || text.includes('return (') || text.includes('=>')
-  }
-
-  private getComponentProps(node: ts.ArrowFunction | ts.FunctionExpression): any {
-    const firstParam = node.parameters[0]
-    if (firstParam) {
-      return {
-        name: firstParam.name?.getText(),
-        type: firstParam.type?.getText()
-      }
-    }
-    return null
-  }
-
-  private extractFunctionCalls(node: ts.Node, fromId: string, relationships: Relationship[], sourceFile: ts.SourceFile) {
-    const visit = (n: ts.Node) => {
-      if (ts.isCallExpression(n)) {
-        const callText = n.expression.getText()
-        relationships.push({
-          fromId,
-          toId: '', // Will be resolved later
-          type: 'CALLS',
-          properties: {
-            callExpression: callText,
-            line: sourceFile.getLineAndCharacterOfPosition(n.getStart()).line + 1,
-            unresolvedTarget: callText
-          }
-        })
-      }
-      ts.forEachChild(n, visit)
-    }
-    ts.forEachChild(node, visit)
-  }
-}
 
 // Process a single code file
 async function processCodeFile(file: any, supabase: any, openai: OpenAI) {
@@ -348,10 +76,19 @@ async function processCodeFile(file: any, supabase: any, openai: OpenAI) {
     
     if (file.language === 'typescript' || file.language === 'javascript' || 
         file.language === 'tsx' || file.language === 'jsx') {
-      const parser = new TypeScriptParser()
-      const result = parser.parse(file.content, file.file_path)
-      entities = result.entities
-      relationships = result.relationships
+      try {
+        console.log(`[Process Code] Starting TypeScript parsing for ${file.file_path}`)
+        // Use enhanced parser with simplified metadata
+        const parser = new EnhancedTypeScriptParser()
+        const result = parser.parse(file.content, file.file_path)
+        entities = result.entities
+        relationships = result.relationships
+        console.log(`[Process Code] Parsed ${entities.length} entities and ${relationships.length} relationships`)
+      } catch (parseError: any) {
+        console.error(`[Process Code] Parse error: ${parseError.message}`)
+        console.error(`[Process Code] Parse stack: ${parseError.stack}`)
+        throw new Error(`Failed to parse TypeScript: ${parseError.message}`)
+      }
     } else {
       console.log(`[Process Code] Unsupported language: ${file.language}`)
       // For now, create a single file entity for unsupported languages
@@ -483,6 +220,7 @@ ${entity.content.substring(0, 4000)}`
       // Create relationships
       for (const rel of relationships) {
         if (rel.fromId && rel.toId) {
+          // Resolved relationship
           await session.run(`
             MATCH (from:CodeEntity {id: $fromId})
             MATCH (to:CodeEntity {id: $toId})
@@ -492,8 +230,47 @@ ${entity.content.substring(0, 4000)}`
             toId: rel.toId,
             properties: rel.properties || {}
           })
+        } else if (rel.fromId && rel.properties?.unresolvedTarget) {
+          // Store unresolved relationship for later resolution
+          await session.run(`
+            MATCH (from:CodeEntity {id: $fromId})
+            CREATE (from)-[:UNRESOLVED_REFERENCE {
+              targetName: $targetName,
+              type: $type,
+              line: $line,
+              fileId: $fileId,
+              projectName: $projectName
+            }]->(ur:UnresolvedReference {
+              id: randomUUID(),
+              targetName: $targetName,
+              type: $type,
+              created_at: datetime()
+            })
+          `, {
+            fromId: rel.fromId,
+            targetName: rel.properties.unresolvedTarget,
+            type: rel.type,
+            line: rel.properties.line || 0,
+            fileId: fileId,
+            projectName: file.project_name
+          })
         }
       }
+      
+      // Try to resolve previously unresolved references in this project
+      await session.run(`
+        MATCH (ur:UnresolvedReference)<-[ref:UNRESOLVED_REFERENCE]-(from:CodeEntity)
+        WHERE ref.projectName = $projectName
+        MATCH (target:CodeEntity {name: ur.targetName, project_name: $projectName})
+        CREATE (from)-[newRel:RESOLVED {
+          type: ref.type,
+          line: ref.line,
+          resolvedAt: datetime()
+        }]->(target)
+        DELETE ref, ur
+      `, {
+        projectName: file.project_name
+      })
 
       // Update Neo4j file ID in code_files table
       await supabase
