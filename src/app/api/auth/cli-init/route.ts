@@ -7,17 +7,20 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
+  const { searchParams, origin } = new URL(request.url)
   const port = searchParams.get('port') || '8899'
   
   // Create Supabase client
   const supabase = await createClient()
   
+  // Use the proper base URL for redirect
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || origin || 'https://www.supastate.ai'
+  
   // Generate OAuth URL with server-side flow
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
-      redirectTo: `${request.headers.get('origin')}/auth/cli/callback?port=${port}`,
+      redirectTo: `${baseUrl}/auth/cli/callback?port=${port}`,
       scopes: 'read:user user:email',
       queryParams: {
         access_type: 'offline',
