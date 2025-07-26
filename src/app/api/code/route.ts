@@ -151,8 +151,8 @@ export async function GET(request: Request) {
           name: entity.properties.name,
           type: entity.properties.type,
           signature: entity.properties.signature,
-          lineStart: entity.properties.line_start?.toNumber(),
-          lineEnd: entity.properties.line_end?.toNumber(),
+          lineStart: entity.properties.line_start ? entity.properties.line_start.toNumber() : null,
+          lineEnd: entity.properties.line_end ? entity.properties.line_end.toNumber() : null,
           metadata: entity.properties.metadata ? JSON.parse(entity.properties.metadata) : {},
           file: file ? {
             id: file.properties.id,
@@ -293,8 +293,8 @@ export async function POST(request: Request) {
             name: record.get('e').properties.name,
             type: record.get('e').properties.type,
             signature: record.get('e').properties.signature,
-            lineStart: record.get('e').properties.line_start?.toNumber(),
-            lineEnd: record.get('e').properties.line_end?.toNumber(),
+            lineStart: record.get('e').properties.line_start ? record.get('e').properties.line_start.toNumber() : null,
+            lineEnd: record.get('e').properties.line_end ? record.get('e').properties.line_end.toNumber() : null,
             projectName: record.get('e').properties.project_name,
           },
           file: record.get('f') ? {
@@ -332,8 +332,8 @@ export async function POST(request: Request) {
             name: record.get('e').properties.name,
             type: record.get('e').properties.type,
             signature: record.get('e').properties.signature,
-            lineStart: record.get('e').properties.line_start?.toNumber(),
-            lineEnd: record.get('e').properties.line_end?.toNumber(),
+            lineStart: record.get('e').properties.line_start ? record.get('e').properties.line_start.toNumber() : null,
+            lineEnd: record.get('e').properties.line_end ? record.get('e').properties.line_end.toNumber() : null,
             projectName: record.get('e').properties.project_name,
           },
           file: record.get('f') ? {
