@@ -1,0 +1,88 @@
+  Clarifying Questions:
+
+  1. Code Analysis Depth:
+    - Should we extract more granular entities than Camille currently does?
+   (e.g., type definitions, decorators, JSX components, hooks, API routes)
+Yes. Go as deep as you want.
+
+    - Should we analyze code comments and docstrings as separate entities
+  that can be linked to memories?
+Yes!
+
+  2. Git Integration:
+    - When reading git metadata, should we store branch history, commit
+  SHAs, and author information in the graph?
+OMG yes - this would be super helpful.
+
+    - Should we track code evolution (different versions of the same
+  function over time)?
+Yes!
+
+  3. Memory-Code Relationships:
+    - How aggressive should we be in auto-discovering relationships? For
+  example:
+        - When a memory mentions "AuthService", auto-link to code entities
+  with that name?
+Yes, but realize you may have ambiguity here - unless you are able to definitively resolve the ambiguity.
+So it may be one to many.
+
+      - Use NLP to extract code references from memory content?
+Yes.
+
+      - Track which files were open/edited during a memory session?
+If you can.
+
+  4. Language Support:
+    - Should we start with TypeScript/JavaScript only (like Camille) or
+  plan for Python, C++, Go from the beginning?
+Plan for Python, C++ from the beginning. We will have to support these languages eventually, especially Python.
+
+    - Different languages have different AST structures - how much should
+  we normalize?
+I think you should have different language models for different languages. Don't try to normalize too much, as you'll end up with least common denominator problems.
+
+  5. UI Priorities:
+    - What's more important initially: code graph visualization or powerful
+   search?
+I need something cool to initially show the code graph visualization, but once you're past that - search and showing relationships throughout memories, code presentation, and search is more important. We basically want to show how we have inferred a ton of relationships, and then be able to eventually serve this up to LLM powered coding agents through MCP as a tool. So the search is more important, but we do want a powerful UI that demonstrates that we have a commanding understanding of the code and memories, and have inferred amazing, rich relationships between all of it.
+
+    - Should we build a code browser/viewer into Supastate or rely on
+  external tools?
+A basic code browser/viewer should be built. You can use monaco if that makes sense and is easy.
+
+    - Do you envision split-pane views showing memories alongside related
+  code?
+Yes!
+
+  6. Performance & Scale:
+    - What's the expected code volume? (files, LOC, number of repositories)
+I'm thinking like a dozen repos per user. Probably all of the current size of supastate.
+
+    - Should we support incremental updates (only process changed files)
+  from day one?
+Yes. In fact, Camille has a file watcher in it - and that is what sends updates to you. You also want to be smart and make sure you're not just reprocessing the same file (with no edits) over and over again.
+
+    - Real-time processing as code arrives, or batch processing?
+Camille already has a watcher in it - so you will want to reuse this. We're going to need to build a similar concept in when we decide to implement GitHub as an integration point.
+
+  7. Advanced Features Priority:
+    - Code quality metrics (complexity, test coverage references)?
+Not as important.
+
+    - Security vulnerability tracking linked to memories?
+Absolutely.
+
+    - AI-powered code explanation generation?
+OMG - that would be super helpful. But this will also want to be exposed as an API/tool via MCP to the LLM down the road. In fact, be API first about all of this - you want to make sure every UI capability you build here has a backing API.
+
+    - Diff analysis and code review integration?
+Diff analysis yes. Code review integration - no. GitHub will still be doing the code reviews, pull requests, etc.
+
+  8. Background Processing:
+    - Similar to memory processing, what batch sizes make sense for code
+  files?
+We need to be able to handle thousands of files per project, so we want to go as fast as we can, limited only by the embedding processor (OpenAI). Now one thing to keep in mind is that every bit of code will have embeddings for it, stored in Neo4J.
+
+    - Should we process entire repositories at once or file by file?
+Is there a way to get the whole repository? I think this will be a problem with super large repositories. Like will an edge function be able to handle sending a 500 MB repository? But I can see if we go file by file that we will have to "go back" possibly to reconnect previous edges that we hadn't discovered. So for example, B depends on A. We process B's file first. When we get to A, we will need to make sure an edge is created from B to A. Make sense?
+

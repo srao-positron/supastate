@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Brain, Database, TrendingUp } from 'lucide-react'
+import { Brain, Database, TrendingUp, Code } from 'lucide-react'
 import { MemorySearch } from '@/components/memories/memory-search'
 import { MemoryList } from '@/components/memories/memory-list'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { MemoryFilters, type MemoryFilters as MemoryFiltersType } from '@/components/memories/memory-filters'
+import { CodeExplorer } from '@/components/code/code-explorer'
 
 export default function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[]>([])
@@ -255,9 +256,13 @@ export default function MemoriesPage() {
 
       {/* Tabbed Interface */}
       <Tabs defaultValue="summaries" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-3 max-w-2xl">
           <TabsTrigger value="summaries">Project Summaries</TabsTrigger>
           <TabsTrigger value="details">Detailed Memories</TabsTrigger>
+          <TabsTrigger value="code" className="flex items-center gap-2">
+            <Code className="h-4 w-4" />
+            Code Explorer
+          </TabsTrigger>
         </TabsList>
 
         {/* Project Summaries Tab */}
@@ -338,6 +343,11 @@ export default function MemoriesPage() {
               onRelatedMemoryClick={handleRelatedMemoryClick}
             />
           )}
+        </TabsContent>
+
+        {/* Code Explorer Tab */}
+        <TabsContent value="code" className="space-y-4">
+          <CodeExplorer />
         </TabsContent>
       </Tabs>
     </div>
