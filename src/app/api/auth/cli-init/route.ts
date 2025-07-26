@@ -46,6 +46,6 @@ export async function GET(request: Request) {
   const cliState = Buffer.from(JSON.stringify({ cli: true, port, t: Date.now() })).toString('base64url')
   authUrl.searchParams.set('state', `${existingState}|CLI:${cliState}`)
   
-  // Return the modified auth URL
-  return NextResponse.json({ authUrl: authUrl.toString() })
+  // Redirect the browser to the OAuth URL with our CLI state embedded
+  return NextResponse.redirect(authUrl.toString())
 }
