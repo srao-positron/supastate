@@ -7,21 +7,21 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const port = searchParams.get('port') || '8899'
+  
+  // Store CLI session info in a cookie
+  const cliSessionCookie = JSON.stringify({ port, isCli: true, timestamp: Date.now() })
   
   // Create Supabase client
   const supabase = await createClient()
   
-  // Use the proper base URL for redirect
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || origin || 'https://www.supastate.ai'
-  
-  // Generate OAuth URL with server-side flow
-  // The redirectTo needs to be the actual callback handler that Supabase will redirect to
+  // Use a fixed redirect URL that Supabase is configured to use
+  // We'll detect CLI auth by the presence of the cookie
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
-      redirectTo: `${baseUrl}/auth/callback?cli=true&port=${port}`,
+      redirectTo: 'https://www.supastate.ai/auth/callback',
       scopes: 'read:user user:email',
       queryParams: {
         access_type: 'offline',
@@ -37,8 +37,16 @@ export async function GET(request: Request) {
     )
   }
   
-  // Return the OAuth URL for the CLI to open
-  return NextResponse.json({
-    authUrl: data.url
+  // Return the auth URL and set the CLI session cookie
+  const response = NextResponse.json({ authUrl: data.url })
+  
+  response.cookies.set('cli_auth_session', cliSessionCookie, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 600, // 10 minutes
+    path: '/'
   })
+  
+  return response
 }
