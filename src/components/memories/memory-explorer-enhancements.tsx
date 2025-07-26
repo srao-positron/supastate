@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { 
-  BookOpen, 
   FileText, 
   Clock, 
   Tag, 
@@ -12,7 +11,6 @@ import {
   Download,
   Copy,
   Link,
-  MessageSquare,
   Database,
   TrendingUp,
   Brain
@@ -240,46 +238,20 @@ export function MemoryInsights({ memories, totalMemories, projectCount }: Memory
   const totalWords = memories.reduce((acc, m) => acc + m.content.split(' ').length, 0)
   const avgWordsPerMemory = memories.length > 0 ? Math.round(totalWords / memories.length) : 0
   
-  const messageTypes = memories.reduce((acc, m) => {
-    // Parse metadata if it's a string
-    let metadata = m.metadata
-    if (typeof metadata === 'string') {
-      try {
-        metadata = JSON.parse(metadata)
-      } catch (e) {
-        metadata = {}
-      }
-    }
-    
-    // Detect message type from content patterns
-    let type = 'unknown'
-    const contentLower = m.content.toLowerCase()
-    const contentStart = m.content.substring(0, 50).toLowerCase()
-    
-    // Check for explicit patterns at the beginning of content
-    if (contentStart.startsWith('user:') || contentStart.includes('\nuser:')) {
-      type = 'user'
-    } else if (contentStart.startsWith('assistant:') || contentStart.includes('\nassistant:')) {
-      type = 'assistant'
-    } else if (contentLower.includes('user:') && contentLower.indexOf('user:') < 100) {
-      type = 'user'
-    } else if (contentLower.includes('assistant:') && contentLower.indexOf('assistant:') < 100) {
-      type = 'assistant'
-    }
-    
-    acc[type] = (acc[type] || 0) + 1
+  // Calculate top projects
+  const projectCounts = memories.reduce((acc, m) => {
+    acc[m.project_name] = (acc[m.project_name] || 0) + 1
     return acc
   }, {} as Record<string, number>)
   
-  const topProject = Object.entries(
-    memories.reduce((acc, m) => {
-      acc[m.project_name] = (acc[m.project_name] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-  ).sort(([, a], [, b]) => b - a)[0]
+  const topProjects = Object.entries(projectCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+  
+  const topProject = topProjects[0]
   
   return (
-    <div className="grid grid-cols-3 md:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
       <div className="text-center">
         <Database className="h-6 w-6 mx-auto mb-1 text-primary" />
         <p className="text-xl font-bold">{totalMemories.toLocaleString()}</p>
@@ -300,15 +272,20 @@ export function MemoryInsights({ memories, totalMemories, projectCount }: Memory
         <p className="text-xl font-bold">{avgWordsPerMemory}</p>
         <p className="text-xs text-muted-foreground">Avg Words</p>
       </div>
-      <div className="text-center">
-        <MessageSquare className="h-6 w-6 mx-auto mb-1 text-primary" />
-        <p className="text-xl font-bold">{messageTypes.user || 0}</p>
-        <p className="text-xs text-muted-foreground">User Msgs</p>
-      </div>
-      <div className="text-center">
-        <BookOpen className="h-6 w-6 mx-auto mb-1 text-primary" />
-        <p className="text-xl font-bold">{messageTypes.assistant || 0}</p>
-        <p className="text-xs text-muted-foreground">AI Responses</p>
+      {/* Top Projects List */}
+      <div className="col-span-2 md:col-span-4 mt-2">
+        <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4" />
+          Top Projects
+        </h4>
+        <div className="space-y-1">
+          {topProjects.map(([project, count]) => (
+            <div key={project} className="flex items-center justify-between text-sm">
+              <span className="truncate">{project}</span>
+              <span className="font-mono text-muted-foreground">{count}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
