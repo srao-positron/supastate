@@ -6,37 +6,35 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/memories'
+  const state = searchParams.get('state') || ''
   
-  // Check for CLI session from cookie
+  // Check for CLI auth in state parameter
   let isCli = false
   let port = '8899'
   
-  const cookieStore = await cookies()
-  const cliSessionCookie = cookieStore.get('cli_auth_session')
-  
-  if (cliSessionCookie) {
+  // Look for our CLI marker in the state
+  if (state.includes('|CLI:')) {
     try {
-      const cliSession = JSON.parse(cliSessionCookie.value)
-      // Check if this is a recent CLI auth request (within 10 minutes)
-      if (cliSession.isCli === true && cliSession.timestamp && (Date.now() - cliSession.timestamp) < 600000) {
-        isCli = true
-        port = cliSession.port || '8899'
+      const cliPart = state.split('|CLI:')[1]
+      if (cliPart) {
+        const cliData = JSON.parse(Buffer.from(cliPart, 'base64url').toString())
+        // Check if this is a recent CLI auth request (within 10 minutes)
+        if (cliData.cli === true && cliData.t && (Date.now() - cliData.t) < 600000) {
+          isCli = true
+          port = cliData.port || '8899'
+        }
       }
     } catch (e) {
-      console.error('[Auth Callback] Failed to parse CLI session cookie:', e)
+      console.error('[Auth Callback] Failed to parse CLI state:', e)
     }
-    
-    // Always delete the cookie after checking it, regardless of validity
-    // This ensures we don't affect future non-CLI logins
-    cookieStore.delete('cli_auth_session')
   }
 
   console.log('[Auth Callback] Received callback:', {
     code: code ? 'present' : 'missing',
     isCli,
     port,
-    url: request.url,
-    hasCLISessionCookie: !!cliSessionCookie
+    state: state ? 'present' : 'missing',
+    url: request.url
   })
 
   // If this is a CLI authentication, redirect to the CLI callback handler

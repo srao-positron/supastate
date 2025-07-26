@@ -37,16 +37,15 @@ export async function GET(request: Request) {
     )
   }
   
-  // Return the auth URL and set the CLI session cookie
-  const response = NextResponse.json({ authUrl: data.url })
+  // Parse the auth URL to add our own state parameter
+  const authUrl = new URL(data.url)
   
-  response.cookies.set('cli_auth_session', cliSessionCookie, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600, // 10 minutes
-    path: '/'
-  })
+  // Add a custom state parameter to identify CLI auth
+  // We'll append it to whatever state Supabase already set
+  const existingState = authUrl.searchParams.get('state') || ''
+  const cliState = Buffer.from(JSON.stringify({ cli: true, port, t: Date.now() })).toString('base64url')
+  authUrl.searchParams.set('state', `${existingState}|CLI:${cliState}`)
   
-  return response
+  // Return the modified auth URL
+  return NextResponse.json({ authUrl: authUrl.toString() })
 }
