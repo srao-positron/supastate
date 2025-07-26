@@ -74,21 +74,40 @@ async function processMemoryBatch(chunks: any[], openai: OpenAI, supabase: any) 
         console.log(`[Process Embeddings] Using pre-computed embedding for chunk ${chunk.id}`)
       } else {
         // Generate embedding
-        // Truncate content if it's too large (roughly 4 chars per token)
+        // Truncate content if it's too large
+        // Be more aggressive with truncation - some content has worse char/token ratio
         let content = chunk.content
-        const maxChars = 7000 * 4 // ~28k characters for 7k tokens (leaving buffer for safety)
+        const maxChars = 20000 // Much more conservative limit
         if (content.length > maxChars) {
           console.log(`[Process Embeddings] Truncating chunk ${chunk.id} from ${content.length} to ${maxChars} chars`)
           content = content.substring(0, maxChars)
         }
         
-        const embeddingResponse = await openai.embeddings.create({
-          model: 'text-embedding-3-large',
-          input: content,
-          dimensions: 3072,
-        })
-        
-        embedding = embeddingResponse.data[0].embedding
+        try {
+          const embeddingResponse = await openai.embeddings.create({
+            model: 'text-embedding-3-large',
+            input: content,
+            dimensions: 3072,
+          })
+          
+          embedding = embeddingResponse.data[0].embedding
+        } catch (embeddingError: any) {
+          // If we still hit token limit, truncate more aggressively
+          if (embeddingError.status === 400 && embeddingError.message?.includes('maximum context length')) {
+            console.log(`[Process Embeddings] Token limit hit for chunk ${chunk.id}, truncating to 10k chars`)
+            content = chunk.content.substring(0, 10000)
+            
+            const embeddingResponse = await openai.embeddings.create({
+              model: 'text-embedding-3-large',
+              input: content,
+              dimensions: 3072,
+            })
+            
+            embedding = embeddingResponse.data[0].embedding
+          } else {
+            throw embeddingError
+          }
+        }
       }
       
       // Create memory node in Neo4j
@@ -250,7 +269,17 @@ async function processEmbeddingsBackground(taskId: string) {
       const batchPromises = []
       for (let i = 0; i < memoryChunks.length; i += PARALLEL_WORKERS) {
         const batch = memoryChunks.slice(i, i + PARALLEL_WORKERS)
-        batchPromises.push(processMemoryBatch(batch, openai, supabase))
+        batchPromises.push(
+          processMemoryBatch(batch, openai, supabase).catch(error => {
+            console.error(`[Process Embeddings] Batch processing error:`, error)
+            // Return failed results for this batch
+            return batch.map(chunk => ({
+              success: false,
+              id: chunk.id,
+              error: error.message
+            }))
+          })
+        )
       }
       
       const batchResults = await Promise.all(batchPromises)
