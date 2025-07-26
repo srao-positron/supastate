@@ -5,6 +5,7 @@ import neo4j from 'https://unpkg.com/neo4j-driver@5.12.0/lib/browser/neo4j-web.e
 import ts from 'https://esm.sh/typescript@5.3.3'
 import { EnhancedTypeScriptParser } from './enhanced-parser.ts'
 import { SimpleTypeScriptParser } from './simple-parser.ts'
+import { PythonParser } from './python-parser.ts'
 
 const BATCH_SIZE = 50
 const PARALLEL_WORKERS = 10
@@ -88,6 +89,41 @@ async function processCodeFile(file: any, supabase: any, openai: OpenAI) {
         console.error(`[Process Code] Parse error: ${parseError.message}`)
         console.error(`[Process Code] Parse stack: ${parseError.stack}`)
         throw new Error(`Failed to parse TypeScript: ${parseError.message}`)
+      }
+    } else if (file.language === 'python' || file.language === 'py') {
+      try {
+        console.log(`[Process Code] Starting Python parsing for ${file.file_path}`)
+        const parser = new PythonParser()
+        await parser.parse(file.content, file.file_path)
+        await parser.extractRelationships()
+        
+        // Convert to common format
+        entities = parser.getEntities().map(e => ({
+          id: e.id,
+          type: e.type as any,
+          name: e.name,
+          content: e.content || '',
+          lineStart: e.line,
+          lineEnd: e.endLine || e.line,
+          columnStart: e.column,
+          metadata: e.metadata
+        }))
+        
+        relationships = parser.getRelationships().map(r => ({
+          fromId: r.fromId,
+          toId: undefined,
+          type: r.type,
+          properties: {
+            ...r.properties,
+            unresolvedTarget: r.toName
+          }
+        }))
+        
+        console.log(`[Process Code] Parsed ${entities.length} entities and ${relationships.length} relationships`)
+      } catch (parseError: any) {
+        console.error(`[Process Code] Python parse error: ${parseError.message}`)
+        console.error(`[Process Code] Parse stack: ${parseError.stack}`)
+        throw new Error(`Failed to parse Python: ${parseError.message}`)
       }
     } else {
       console.log(`[Process Code] Unsupported language: ${file.language}`)

@@ -104,4 +104,3 @@ async function inspectNeo4j() {
 }
 
 inspectNeo4j().catch(console.error);
-EOF < /dev/null
