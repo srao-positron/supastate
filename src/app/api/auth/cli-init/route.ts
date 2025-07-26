@@ -17,10 +17,11 @@ export async function GET(request: Request) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || origin || 'https://www.supastate.ai'
   
   // Generate OAuth URL with server-side flow
+  // The redirectTo needs to be the actual callback handler that Supabase will redirect to
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
-      redirectTo: `${baseUrl}/auth/cli/callback?port=${port}`,
+      redirectTo: `${baseUrl}/auth/callback?cli=true&port=${port}`,
       scopes: 'read:user user:email',
       queryParams: {
         access_type: 'offline',
