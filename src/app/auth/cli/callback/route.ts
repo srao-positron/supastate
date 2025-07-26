@@ -112,6 +112,8 @@ export async function GET(request: Request) {
                     expiresAt: ${expiresAt},
                     userId: '${user.id}',
                     email: '${user.email || ''}',
+                    supabaseUrl: '${process.env.NEXT_PUBLIC_SUPABASE_URL}',
+                    supabaseAnonKey: '${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}',
                   }),
                 });
                 console.log('[CLI Auth Debug] Response from CLI:', response.status, response.statusText);

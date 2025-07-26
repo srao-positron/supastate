@@ -74,17 +74,36 @@ export async function GET(request: Request) {
 
     // Get Neo4j driver
     const neo4jDriver = getDriver()
+    
+    // Test Neo4j connection
+    try {
+      await neo4jDriver.verifyConnectivity()
+      console.log('[Code API] Neo4j connection verified')
+    } catch (connError: any) {
+      console.error('[Code API] Neo4j connection failed:', connError)
+      return NextResponse.json(
+        { error: 'Database connection failed', details: connError.message },
+        { status: 503 }
+      )
+    }
+    
     const session = neo4jDriver.session()
 
     try {
       // Build query based on filters
+      // Handle both user and team workspace IDs - entities created under user workspace
+      // should be accessible when user is part of a team
       let query = `
         MATCH (e:CodeEntity)
-        WHERE (e.workspace_id = $workspaceId OR e.user_id = $userId OR e.team_id = $teamId)
+        WHERE (e.workspace_id = $workspaceId 
+               OR e.workspace_id = $userWorkspaceId
+               OR e.user_id = $userId 
+               OR e.team_id = $teamId)
       `
       
       const queryParams: any = {
         workspaceId,
+        userWorkspaceId: `user:${user.id}`, // Always include user workspace ID
         userId: user.id,
         teamId: teamId || null,
         limit: neo4j.int(params.limit),
@@ -147,7 +166,10 @@ export async function GET(request: Request) {
       // Get entity type counts for filters
       const typeCountQuery = `
         MATCH (e:CodeEntity)
-        WHERE (e.workspace_id = $workspaceId OR e.user_id = $userId OR e.team_id = $teamId)
+        WHERE (e.workspace_id = $workspaceId 
+               OR e.workspace_id = $userWorkspaceId
+               OR e.user_id = $userId 
+               OR e.team_id = $teamId)
         ${params.projectName ? 'AND e.project_name = $projectName' : ''}
         RETURN e.type as type, count(e) as count
         ORDER BY count DESC
@@ -155,6 +177,7 @@ export async function GET(request: Request) {
       
       const typeCountResult = await session.run(typeCountQuery, {
         workspaceId,
+        userWorkspaceId: `user:${user.id}`,
         userId: user.id,
         teamId: teamId || null,
         ...(params.projectName && { projectName: params.projectName })
@@ -177,10 +200,19 @@ export async function GET(request: Request) {
       await session.close()
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching code entities:', error)
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    })
     return NextResponse.json(
-      { error: 'Failed to fetch code entities' },
+      { 
+        error: 'Failed to fetch code entities',
+        details: error.message,
+        code: error.code
+      },
       { status: 500 }
     )
   }
