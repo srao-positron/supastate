@@ -11,10 +11,9 @@ import { memoriesAPI, Memory, MemorySearchResponse } from '@/lib/api/memories'
 import { useToast } from '@/hooks/use-toast'
 import { 
   QuickActionsBar, 
-  TimelineView, 
-  MemoryInsights 
+  TimelineView
 } from '@/components/memories/memory-explorer-enhancements'
-import { MemoryActivityCharts } from '@/components/memories/memory-activity-charts'
+import { MemoryDashboard } from '@/components/memories/memory-dashboard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -37,6 +36,7 @@ export default function MemoriesPage() {
   })
   const [projects, setProjects] = useState<string[]>([])
   const [activeFilters, setActiveFilters] = useState<MemoryFiltersType>({})
+  const [codeStats, setCodeStats] = useState<any>(null)
   const { toast } = useToast()
 
   const pageSize = 20
@@ -58,6 +58,9 @@ export default function MemoriesPage() {
         
         // Load project summaries
         await loadProjectSummaries()
+        
+        // Load code stats
+        await loadCodeStats()
       } catch (error) {
         console.error('Failed to load initial data:', error)
         // Set empty state so the UI still renders
@@ -73,6 +76,19 @@ export default function MemoriesPage() {
     }
     loadInitialData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load code stats
+  const loadCodeStats = async () => {
+    try {
+      const response = await fetch('/api/code/stats')
+      if (response.ok) {
+        const data = await response.json()
+        setCodeStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Failed to load code stats:', error)
+    }
+  }
 
   // Load project summaries
   const loadProjectSummaries = async () => {
@@ -240,17 +256,17 @@ export default function MemoriesPage() {
       </div>
 
 
-      {/* Insights (shown by default) */}
+      {/* Dashboard (shown by default) */}
       <div className="space-y-4">
-        {showInsights && memories.length > 0 && (
-          <>
-            <MemoryInsights 
-              memories={memories} 
-              totalMemories={stats.totalMemories}
-              projectCount={Object.keys(stats.projectCounts).length}
-            />
-            <MemoryActivityCharts memories={memories} />
-          </>
+        {showInsights && (
+          <MemoryDashboard 
+            memories={memories} 
+            allMemories={memories}
+            totalMemories={stats.totalMemories}
+            projectCount={Object.keys(stats.projectCounts).length}
+            stats={stats}
+            codeStats={codeStats}
+          />
         )}
       </div>
 
