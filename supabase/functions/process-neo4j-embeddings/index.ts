@@ -211,6 +211,23 @@ serve(async (req) => {
             })
             .eq('id', item.id)
 
+          // Record in processed_memories table for deduplication
+          const contentHash = item.metadata?.contentHash || item.content_hash
+          if (contentHash) {
+            await supabaseClient
+              .from('processed_memories')
+              .upsert({
+                workspace_id: item.workspace_id,
+                project_name: item.project_name || 'default',
+                chunk_id: item.chunk_id,
+                content_hash: contentHash,
+                neo4j_node_id: memoryId,
+                processed_at: new Date().toISOString()
+              }, {
+                onConflict: 'workspace_id,project_name,chunk_id'
+              })
+          }
+
           processedIds.push(item.id)
 
         } finally {

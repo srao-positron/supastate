@@ -158,11 +158,35 @@ export async function POST(request: NextRequest) {
     authLogger.info('Creating memory queue entries', { totalChunks: chunks.length })
     let queueSuccessCount = 0
     let queueErrors = 0
+    let skippedCount = 0
     
     try {
       // Create queue entries for each chunk
       const queuePromises = chunks.map(async (chunk) => {
         try {
+          // Calculate content hash for deduplication
+          const contentHash = createHash('sha256')
+            .update(chunk.content)
+            .digest('hex')
+          
+          // Check if this memory has already been processed
+          const { data: existingMemory } = await supabase
+            .from('processed_memories')
+            .select('id')
+            .eq('workspace_id', workspaceId)
+            .eq('project_name', projectName)
+            .eq('content_hash', contentHash)
+            .single()
+          
+          if (existingMemory) {
+            authLogger.debug('Skipping duplicate memory chunk', { 
+              chunkId: chunk.chunkId,
+              contentHashPrefix: contentHash.substring(0, 8) 
+            })
+            skippedCount++
+            return { success: true, skipped: true }
+          }
+          
           // Prepare metadata with all relevant information including the embedding
           const queueMetadata = {
             ...chunk.metadata,
@@ -174,6 +198,7 @@ export async function POST(request: NextRequest) {
             embedding: chunk.embedding, // Store the pre-computed embedding in metadata
             userId: authenticatedUserId,
             teamId: authenticatedTeamId,
+            contentHash, // Store hash for processing function
           }
           
           // Insert into memory_queue
@@ -184,6 +209,7 @@ export async function POST(request: NextRequest) {
               session_id: body.sessionId,
               chunk_id: chunk.chunkId,
               content: chunk.content,
+              content_hash: contentHash,
               metadata: queueMetadata,
               status: 'pending',
             }, {
@@ -214,7 +240,8 @@ export async function POST(request: NextRequest) {
       
       authLogger.info('Queue entries created', { 
         success: queueSuccessCount, 
-        failed: queueErrors 
+        failed: queueErrors,
+        skipped: skippedCount 
       })
     } catch (queueError) {
       authLogger.error('Queue creation batch failed', queueError)
@@ -245,8 +272,9 @@ export async function POST(request: NextRequest) {
       success: true, 
       queued: queueSuccessCount,
       failed: queueErrors,
+      skipped: skippedCount,
       workspace: authenticatedTeamId ? 'team' : 'personal',
-      message: 'Chunks queued for processing'
+      message: `Chunks processed: ${queueSuccessCount} queued, ${skippedCount} skipped (duplicates), ${queueErrors} failed`
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
