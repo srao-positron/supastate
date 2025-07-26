@@ -10,14 +10,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const port = searchParams.get('port') || '8899'
   
-  // Store CLI session info in a cookie
-  const cliSessionCookie = JSON.stringify({ port, isCli: true, timestamp: Date.now() })
-  
   // Create Supabase client
   const supabase = await createClient()
   
-  // Use a fixed redirect URL that Supabase is configured to use
-  // We'll detect CLI auth by the presence of the cookie
+  // Generate OAuth URL with GitHub
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
@@ -37,15 +33,18 @@ export async function GET(request: Request) {
     )
   }
   
-  // Parse the auth URL to add our own state parameter
-  const authUrl = new URL(data.url)
+  // Create response that will redirect to OAuth
+  const response = NextResponse.redirect(data.url)
   
-  // Add a custom state parameter to identify CLI auth
-  // We'll append it to whatever state Supabase already set
-  const existingState = authUrl.searchParams.get('state') || ''
-  const cliState = Buffer.from(JSON.stringify({ cli: true, port, t: Date.now() })).toString('base64url')
-  authUrl.searchParams.set('state', `${existingState}|CLI:${cliState}`)
+  // Set a cookie that works across subdomains
+  response.cookies.set('cli_auth_session', JSON.stringify({ port, isCli: true, timestamp: Date.now() }), {
+    httpOnly: true,
+    secure: true, // Always use secure in production
+    sameSite: 'lax',
+    maxAge: 600, // 10 minutes
+    path: '/',
+    domain: '.supastate.ai' // This makes it available to both www.supastate.ai and supastate.ai
+  })
   
-  // Redirect the browser to the OAuth URL with our CLI state embedded
-  return NextResponse.redirect(authUrl.toString())
+  return response
 }
