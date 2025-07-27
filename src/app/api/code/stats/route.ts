@@ -27,16 +27,29 @@ export async function GET(request: NextRequest) {
 
     const userId = user.id
     const teamId = profile?.team_id
-    const workspaceId = `user:${userId}`
+    const workspaceId = teamId ? `team:${teamId}` : `user:${userId}`
     const userWorkspaceId = `user:${userId}`
+
+    // Build WHERE clause based on whether user has a team
+    let whereClause = teamId 
+      ? `(e.workspace_id = $workspaceId 
+         OR e.workspace_id = $userWorkspaceId
+         OR e.user_id = $userId 
+         OR e.team_id = $teamId)`
+      : `(e.workspace_id = $workspaceId 
+         OR e.workspace_id = $userWorkspaceId
+         OR e.user_id = $userId)`
+
+    // Build parameters object
+    const params: any = { workspaceId, userWorkspaceId, userId }
+    if (teamId) {
+      params.teamId = teamId
+    }
 
     // Get code entity stats
     const result = await session.run(`
       MATCH (e:CodeEntity)
-      WHERE (e.workspace_id = $workspaceId 
-             OR e.workspace_id = $userWorkspaceId
-             OR e.user_id = $userId 
-             OR e.team_id = $teamId)
+      WHERE ${whereClause}
       OPTIONAL MATCH (e)-[:DEFINED_IN]->(f:CodeFile)
       WITH e, f
       RETURN 
@@ -47,17 +60,14 @@ export async function GET(request: NextRequest) {
         null as linkedEntities
       UNION
       MATCH (e:CodeEntity)<-[:REFERENCES_CODE]-(m:Memory)
-      WHERE (e.workspace_id = $workspaceId 
-             OR e.workspace_id = $userWorkspaceId
-             OR e.user_id = $userId 
-             OR e.team_id = $teamId)
+      WHERE ${whereClause}
       RETURN 
         null as totalEntities,
         null as totalFiles,
         null as totalProjects,
         null as entityTypes,
         COUNT(DISTINCT e) as linkedEntities
-    `, { workspaceId, userWorkspaceId, userId, teamId })
+    `, params)
 
     const stats = {
       totalEntities: 0,
@@ -86,13 +96,10 @@ export async function GET(request: NextRequest) {
     // Get entity type distribution
     const typeResult = await session.run(`
       MATCH (e:CodeEntity)
-      WHERE (e.workspace_id = $workspaceId 
-             OR e.workspace_id = $userWorkspaceId
-             OR e.user_id = $userId 
-             OR e.team_id = $teamId)
+      WHERE ${whereClause}
       RETURN e.type as type, COUNT(e) as count
       ORDER BY count DESC
-    `, { workspaceId, userWorkspaceId, userId, teamId })
+    `, params)
 
     stats.entityTypes = {}
     for (const record of typeResult.records) {
