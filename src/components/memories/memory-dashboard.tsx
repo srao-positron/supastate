@@ -93,7 +93,9 @@ export function MemoryDashboard({
     })
 
     const activityMap = allMemories.reduce((acc, memory) => {
-      const date = new Date(memory.created_at)
+      // Use occurred_at for actual conversation time, fallback to created_at
+      const timestamp = memory.occurred_at || memory.created_at
+      const date = new Date(timestamp)
       date.setHours(0, 0, 0, 0)
       const dateStr = date.toISOString().split('T')[0]
       acc[dateStr] = (acc[dateStr] || 0) + 1
@@ -114,7 +116,9 @@ export function MemoryDashboard({
   // Calculate hourly distribution with all hours
   const hourlyDistribution = useMemo(() => {
     const hourMap = allMemories.reduce((acc, memory) => {
-      const hour = new Date(memory.created_at).getHours()
+      // Use occurred_at for actual conversation time, fallback to created_at
+      const timestamp = memory.occurred_at || memory.created_at
+      const hour = new Date(timestamp).getHours()
       acc[hour] = (acc[hour] || 0) + 1
       return acc
     }, {} as Record<number, number>)
@@ -129,7 +133,9 @@ export function MemoryDashboard({
   // Calculate weekly patterns
   const weeklyPattern = useMemo(() => {
     const dayMap = allMemories.reduce((acc, memory) => {
-      const day = new Date(memory.created_at).getDay()
+      // Use occurred_at for actual conversation time, fallback to created_at
+      const timestamp = memory.occurred_at || memory.created_at
+      const day = new Date(timestamp).getDay()
       acc[day] = (acc[day] || 0) + 1
       return acc
     }, {} as Record<number, number>)

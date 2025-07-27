@@ -185,6 +185,32 @@ export class IngestionService {
   }
 
   /**
+   * Generate content hash for memory deduplication
+   */
+  private async generateMemoryContentHash(memory: {
+    content: string,
+    project_name: string,
+    occurred_at?: string
+  }): Promise<string> {
+    // Normalize content for consistent hashing
+    const normalized = JSON.stringify({
+      // Remove extra whitespace and normalize line endings
+      content: memory.content.replace(/\s+/g, ' ').trim(),
+      project_name: memory.project_name,
+      // Include occurred_at to distinguish same content at different times
+      occurred_at: memory.occurred_at ? new Date(memory.occurred_at).toISOString().split('T')[0] : 'unknown'
+    })
+    
+    // Use Web Crypto API for browser compatibility
+    const encoder = new TextEncoder()
+    const data = encoder.encode(normalized)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    return hashHex
+  }
+
+  /**
    * Create memory node in Neo4j
    */
   private async createMemoryNode(data: Partial<MemoryNode> & { 
@@ -193,37 +219,95 @@ export class IngestionService {
     embedding: number[],
     chunk_id?: string
   }): Promise<MemoryNode> {
+    // Generate content hash for deduplication
+    const contentHash = await this.generateMemoryContentHash({
+      content: data.content,
+      project_name: data.project_name!,
+      occurred_at: (data as any).occurred_at
+    })
+    
+    // First check if memory with this hash already exists
+    const existingQuery = `
+      MATCH (m:Memory {content_hash: $contentHash})
+      RETURN m
+    `
+    
+    const existingResult = await executeQuery(existingQuery, { contentHash })
+    
+    if (existingResult.records.length > 0) {
+      // Memory with same content already exists
+      const existingRecord = existingResult.records[0]
+      const existingMemory = existingRecord.m
+      log.info('Found existing memory with same content hash', {
+        existingId: existingMemory.id,
+        newId: data.id,
+        contentHash
+      })
+      
+      // Update the existing memory with new metadata if needed
+      const updateQuery = `
+        MATCH (m:Memory {content_hash: $contentHash})
+        SET m.updated_at = $updated_at,
+            m.chunk_id = COALESCE(m.chunk_id, $chunk_id)
+        RETURN m {
+          .id, .content, .embedding, .project_name, .user_id, .team_id,
+          .type, .chunk_id, .created_at, .occurred_at, .updated_at, .metadata
+        }
+      `
+      
+      const updateResult = await executeQuery(updateQuery, {
+        contentHash,
+        updated_at: data.updated_at || new Date().toISOString(),
+        chunk_id: data.chunk_id || null
+      })
+      
+      const updatedRecord = updateResult.records[0]
+      const updatedNode = updatedRecord.m
+      
+      // Return the existing memory node with all properties
+      const memoryNode: MemoryNode = {
+        id: updatedNode.id,
+        content: updatedNode.content || data.content,
+        embedding: updatedNode.embedding || data.embedding,
+        project_name: updatedNode.project_name || data.project_name,
+        user_id: updatedNode.user_id,
+        team_id: updatedNode.team_id,
+        type: updatedNode.type || data.type || 'general',
+        chunk_id: updatedNode.chunk_id || data.chunk_id,
+        created_at: updatedNode.created_at,
+        occurred_at: updatedNode.occurred_at,
+        updated_at: updatedNode.updated_at,
+        metadata: updatedNode.metadata ? JSON.parse(updatedNode.metadata) : {}
+      }
+      
+      // Skip relationship inference for deduplicated memories to avoid errors
+      return memoryNode
+    }
+    
+    // Create new memory with content hash
     const query = `
-      MERGE (m:Memory {id: $id})
-      ON CREATE SET 
-        m.content = $content,
-        m.embedding = $embedding,
-        m.project_name = $project_name,
-        m.user_id = $user_id,
-        m.team_id = $team_id,
-        m.type = $type,
-        m.chunk_id = $chunk_id,
-        m.created_at = $created_at,
-        m.occurred_at = $occurred_at,
-        m.updated_at = $updated_at,
-        m.metadata = $metadata
-      ON MATCH SET
-        m.content = $content,
-        m.embedding = $embedding,
-        m.project_name = $project_name,
-        m.user_id = $user_id,
-        m.team_id = $team_id,
-        m.type = $type,
-        m.chunk_id = $chunk_id,
-        m.occurred_at = $occurred_at,
-        m.updated_at = $updated_at,
-        m.metadata = $metadata
+      CREATE (m:Memory {
+        id: $id,
+        content: $content,
+        content_hash: $contentHash,
+        embedding: $embedding,
+        project_name: $project_name,
+        user_id: $user_id,
+        team_id: $team_id,
+        type: $type,
+        chunk_id: $chunk_id,
+        created_at: $created_at,
+        occurred_at: $occurred_at,
+        updated_at: $updated_at,
+        metadata: $metadata
+      })
       RETURN m
     `
     
     const params = {
       id: data.id,
       content: data.content,
+      contentHash,
       embedding: data.embedding,
       project_name: data.project_name,
       user_id: data.user_id || null,
@@ -240,7 +324,8 @@ export class IngestionService {
       id: params.id,
       projectName: params.project_name,
       embeddingDimensions: params.embedding.length,
-      contentPreview: params.content.substring(0, 50) + '...'
+      contentPreview: params.content.substring(0, 50) + '...',
+      contentHash
     })
 
     const result = await executeQuery(query, params)

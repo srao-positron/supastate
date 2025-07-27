@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
         COUNT(DISTINCT e) as totalEntities,
         COUNT(DISTINCT f.path) as totalFiles,
         COUNT(DISTINCT e.project_name) as totalProjects,
-        COLLECT(DISTINCT e.type) as entityTypes
+        COLLECT(DISTINCT e.type) as entityTypes,
+        null as linkedEntities
       UNION
       MATCH (e:CodeEntity)<-[:REFERENCES_CODE]-(m:Memory)
       WHERE (e.workspace_id = $workspaceId 
@@ -76,7 +77,8 @@ export async function GET(request: NextRequest) {
         for (const type of types) {
           stats.entityTypes[type] = (stats.entityTypes[type] || 0) + 1
         }
-      } else if (record.get('linkedEntities') !== null) {
+      }
+      if (record.get('linkedEntities') !== null) {
         stats.linkedEntities = record.get('linkedEntities').toNumber ? record.get('linkedEntities').toNumber() : record.get('linkedEntities')
       }
     }

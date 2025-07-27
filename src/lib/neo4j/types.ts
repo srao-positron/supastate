@@ -7,6 +7,7 @@ export interface MemoryNode {
   project_name: string
   user_id?: string
   team_id?: string
+  chunk_id?: string
   created_at: string
   occurred_at: string
   updated_at: string

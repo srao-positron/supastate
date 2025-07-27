@@ -85,6 +85,23 @@ async function createNeo4jIndexes() {
       }
     }
 
+    // Create index on Memory.content_hash for de-duplication
+    console.log('\nCreating index on Memory.content_hash...')
+    try {
+      await session.run(`
+        CREATE INDEX memory_content_hash IF NOT EXISTS
+        FOR (n:Memory)
+        ON (n.content_hash)
+      `)
+      console.log('✅ Created Memory content_hash index')
+    } catch (error: any) {
+      if (error.message.includes('already exists')) {
+        console.log('✅ Memory content_hash index already exists')
+      } else {
+        console.error('❌ Error creating Memory content_hash index:', error.message)
+      }
+    }
+
     // List all indexes
     console.log('\nListing all indexes:')
     const indexResult = await session.run('SHOW INDEXES')
@@ -95,7 +112,7 @@ async function createNeo4jIndexes() {
       const labelsOrTypes = record.get('labelsOrTypes')
       const properties = record.get('properties')
       
-      if (labelsOrTypes?.includes('CodeEntity')) {
+      if (labelsOrTypes?.includes('CodeEntity') || labelsOrTypes?.includes('Memory')) {
         console.log(`  ${name}: ${labelsOrTypes} (${properties}) - ${state}`)
       }
     })

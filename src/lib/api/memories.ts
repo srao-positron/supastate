@@ -10,6 +10,7 @@ export interface Memory {
   content: string
   metadata: Record<string, any>
   created_at: string
+  occurred_at?: string
   updated_at: string
   similarity?: number
 }
