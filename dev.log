@@ -11900,3 +11900,37 @@ HTTP 52872: outgoing message end.
 HTTP 52872: server socket close
 HTTP 52872: server socket close
  ✓ Compiled in 372ms (3383 modules)
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER socketOnParserExecute 4230
+HTTP 52872: SERVER socketOnParserExecute 4066
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4068
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+ ✓ Compiled in 569ms (3867 modules)
+HTTP 52872: SERVER socketOnParserExecute 4066
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4068
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4230
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4070
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: server socket close
+HTTP 52872: server socket close
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (108kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)

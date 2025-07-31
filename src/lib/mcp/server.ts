@@ -8,7 +8,7 @@ import {
   Tool,
   Resource,
 } from '@modelcontextprotocol/sdk/types.js'
-import { createServiceClient } from '@/lib/supabase/service'
+import { createClient } from '@supabase/supabase-js'
 import neo4j from 'neo4j-driver'
 import { z } from 'zod'
 import { getOwnershipFilter } from '@/lib/neo4j/query-patterns'
@@ -54,9 +54,8 @@ const InspectEntityToolSchema = z.object({
 
 export class SupastateMCPServer {
   private server: Server
-  private supabase: ReturnType<typeof createServiceClient>
+  private supabase: ReturnType<typeof createClient> | null = null
   private neo4jDriver: neo4j.Driver
-  private accessToken: string | null = null
   private userId: string | null = null
   private workspaceId: string | null = null
 
@@ -74,7 +73,6 @@ export class SupastateMCPServer {
       }
     )
 
-    this.supabase = createServiceClient()
     this.neo4jDriver = neo4j.driver(
       process.env.NEO4J_URI!,
       neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
@@ -84,27 +82,21 @@ export class SupastateMCPServer {
   }
 
   private setupHandlers() {
-    // Validate auth token from transport metadata
-    this.server.setRequestHandler(async (request, transport) => {
-      // Extract auth token from transport metadata
-      const authHeader = transport.metadata?.authorization as string
-      if (!authHeader?.startsWith('Bearer ')) {
-        throw new Error('Unauthorized: Missing or invalid authorization header')
-      }
-
-      const token = authHeader.replace('Bearer ', '')
-      await this.validateToken(token)
-      
-      // Process the request with validated context
-      return this.server.handleRequest(request)
-    })
-
     // Tool handlers
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: this.getTools(),
     }))
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      // Extract auth token from request context (MCP will pass this)
+      const authToken = request.params._meta?.authToken as string
+      if (!authToken) {
+        throw new Error('Authentication required. Please provide your Supabase auth token.')
+      }
+
+      // Initialize Supabase client with user token
+      await this.initializeAuth(authToken)
+
       const { name, arguments: args } = request.params
 
       switch (name) {
@@ -134,39 +126,39 @@ export class SupastateMCPServer {
     })
   }
 
-  private async validateToken(token: string) {
-    // Validate token and get user info
-    const { data: tokenData, error } = await this.supabase
-      .from('mcp_access_tokens')
-      .select('user_id, expires_at')
-      .eq('token', token)
-      .single()
+  private async initializeAuth(authToken: string) {
+    // Create Supabase client with user's token
+    this.supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
 
-    if (error || !tokenData) {
-      throw new Error('Invalid access token')
+    // Get user info
+    const { data: { user }, error } = await this.supabase.auth.getUser()
+    if (error || !user) {
+      throw new Error('Invalid authentication token')
     }
 
-    // Check expiration
-    if (new Date(tokenData.expires_at) < new Date()) {
-      throw new Error('Access token expired')
-    }
-
-    // Update last used timestamp
-    await this.supabase
-      .from('mcp_access_tokens')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('token', token)
-
-    // Get user workspace info
+    // Get user's workspace info
     const { data: userData } = await this.supabase
       .from('users')
       .select('id, team_id')
-      .eq('id', tokenData.user_id)
+      .eq('id', user.id)
       .single()
 
-    this.accessToken = token
-    this.userId = tokenData.user_id
-    this.workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${tokenData.user_id}`
+    this.userId = user.id
+    this.workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${user.id}`
   }
 
   private getTools(): Tool[] {
@@ -729,12 +721,16 @@ export class SupastateMCPServer {
   }
 
   private async getEmbedding(text: string): Promise<number[]> {
-    // Use OpenAI to generate embeddings
-    const { data } = await this.supabase.functions.invoke('generate-embeddings', {
+    if (!this.supabase) {
+      throw new Error('Not authenticated')
+    }
+
+    // Use OpenAI to generate embeddings via edge function
+    const { data, error } = await this.supabase.functions.invoke('generate-embeddings', {
       body: { texts: [text] },
     })
 
-    if (!data?.embeddings?.[0]) {
+    if (error || !data?.embeddings?.[0]) {
       throw new Error('Failed to generate embedding')
     }
 
