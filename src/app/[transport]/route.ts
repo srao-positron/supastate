@@ -28,23 +28,31 @@ function inferTypeFromLabels(labels: string[]): string {
 
 const handler = createMcpHandler(
   async (server) => {
-    // Get authenticated user context
+    let userId: string
+    let workspaceId: string
+    
+    // Try to authenticate the user
+    // First check for session-based auth (direct browser access)
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     
-    if (error || !user) {
-      throw new Error('Authentication required')
+    if (!error && user) {
+      // User is authenticated via session
+      userId = user.id
+      
+      // Get user workspace info
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, team_id')
+        .eq('id', user.id)
+        .single()
+
+      workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${user.id}`
+    } else {
+      // For OAuth flow, the token validation would happen at a higher level
+      // For now, we'll require session authentication
+      throw new Error('Authentication required - please login at https://www.supastate.ai')
     }
-
-    // Get user workspace info
-    const { data: userData } = await supabase
-      .from('users')
-      .select('id, team_id')
-      .eq('id', user.id)
-      .single()
-
-    const userId = user.id
-    const workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${user.id}`
 
     // Initialize Neo4j
     const neo4jDriver = neo4j.driver(

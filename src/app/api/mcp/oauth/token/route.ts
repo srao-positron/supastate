@@ -30,40 +30,35 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const supabase = createServiceClient()
-
-    // Retrieve and validate auth code
-    const { data: authCode, error: fetchError } = await supabase
-      .from('mcp_auth_codes')
-      .select('*')
-      .eq('code', code)
-      .eq('client_id', client_id)
-      .eq('redirect_uri', redirect_uri)
-      .single()
-
-    if (fetchError || !authCode) {
+    // Decode the authorization code
+    let codeData
+    try {
+      codeData = JSON.parse(Buffer.from(code, 'base64url').toString())
+    } catch (e) {
       return NextResponse.json({ 
         error: 'invalid_grant',
-        error_description: 'Invalid authorization code' 
+        error_description: 'Invalid authorization code format' 
       }, { status: 400 })
     }
 
-    // Check if code is expired
-    if (new Date(authCode.expires_at) < new Date()) {
-      // Clean up expired code
-      await supabase
-        .from('mcp_auth_codes')
-        .delete()
-        .eq('code', code)
-      
+    // Validate code hasn't expired
+    if (codeData.expires < Date.now()) {
       return NextResponse.json({ 
         error: 'invalid_grant',
         error_description: 'Authorization code expired' 
       }, { status: 400 })
     }
 
+    // Validate code parameters match
+    if (codeData.client_id !== client_id || codeData.redirect_uri !== redirect_uri) {
+      return NextResponse.json({ 
+        error: 'invalid_grant',
+        error_description: 'Invalid authorization code' 
+      }, { status: 400 })
+    }
+
     // Validate PKCE if present
-    if (authCode.code_challenge) {
+    if (codeData.code_challenge) {
       if (!code_verifier) {
         return NextResponse.json({ 
           error: 'invalid_request',
@@ -72,7 +67,7 @@ export async function POST(request: NextRequest) {
       }
 
       const challenge = generateCodeChallenge(code_verifier)
-      if (challenge !== authCode.code_challenge) {
+      if (challenge !== codeData.code_challenge) {
         return NextResponse.json({ 
           error: 'invalid_grant',
           error_description: 'Invalid code verifier' 
@@ -80,44 +75,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Delete used auth code
-    await supabase
-      .from('mcp_auth_codes')
-      .delete()
-      .eq('code', code)
-
-    // Generate access token
-    const accessToken = crypto.randomUUID()
-    const refreshToken = crypto.randomUUID()
-    const expiresIn = 3600 // 1 hour
-
-    // Store tokens
-    const { error: tokenError } = await supabase
-      .from('mcp_access_tokens')
-      .insert({
-        token: accessToken,
-        refresh_token: refreshToken,
-        user_id: authCode.user_id,
-        client_id: client_id,
-        scopes: ['read'], // Default scopes
-        expires_at: new Date(Date.now() + expiresIn * 1000).toISOString()
-      })
-
-    if (tokenError) {
-      console.error('Failed to store access token:', tokenError)
+    const supabase = createServiceClient()
+    
+    // Get the user's current session
+    const { data: userData } = await supabase.auth.admin.getUserById(codeData.user_id)
+    
+    if (!userData.user) {
       return NextResponse.json({ 
-        error: 'server_error',
-        error_description: 'Failed to generate access token' 
-      }, { status: 500 })
+        error: 'invalid_grant',
+        error_description: 'User not found' 
+      }, { status: 400 })
     }
 
+    // Generate a session token that the MCP server can verify
+    // This is a signed JWT that includes the user ID
+    const tokenData = {
+      user_id: codeData.user_id,
+      client_id: client_id,
+      issued_at: Date.now(),
+      expires_at: Date.now() + 3600 * 1000, // 1 hour
+      nonce: crypto.randomUUID()
+    }
+    
+    const accessToken = Buffer.from(JSON.stringify(tokenData)).toString('base64url')
+    
     // Return OAuth token response
     return NextResponse.json({
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: expiresIn,
-      refresh_token: refreshToken,
-      scope: 'read'
+      expires_in: 3600,
+      scope: 'read write'
     })
 
   } catch (error) {

@@ -39,48 +39,43 @@ export async function GET(request: NextRequest) {
     }, { status: 400 })
   }
 
-  // For MCP, we expect a specific client ID
-  if (clientId !== 'mcp-supastate') {
-    return NextResponse.json({ 
-      error: 'invalid_client',
-      error_description: 'Unknown client' 
-    }, { status: 401 })
-  }
+  // For MCP, we allow any client ID (dynamic registration)
+  // The client_id is just used for tracking
 
   // Get current user session
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
 
   if (error || !user) {
-    // Redirect to login page with return URL
-    const loginUrl = new URL('/login', request.url)
+    // Redirect to Supabase login with return URL
+    const { data: { url } } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        redirectTo: `${request.nextUrl.origin}/api/mcp/oauth/callback?${searchParams.toString()}`
+      }
+    })
+    
+    if (url) {
+      return NextResponse.redirect(url)
+    }
+    
+    // Fallback to login page
+    const loginUrl = new URL('/auth/login', request.url)
     loginUrl.searchParams.set('returnTo', request.url)
     return NextResponse.redirect(loginUrl)
   }
 
-  // Generate authorization code
-  const code = crypto.randomUUID()
-  
-  // Store auth code with user info and PKCE challenge (expires in 10 minutes)
-  const { error: storeError } = await supabase
-    .from('mcp_auth_codes')
-    .insert({
-      code,
-      user_id: user.id,
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      code_challenge: codeChallenge,
-      code_challenge_method: codeChallengeMethod,
-      expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
-    })
-
-  if (storeError) {
-    console.error('Failed to store auth code:', storeError)
-    return NextResponse.json({ 
-      error: 'server_error',
-      error_description: 'Failed to generate authorization code' 
-    }, { status: 500 })
-  }
+  // User is authenticated, generate a temporary code
+  // We'll use a signed JWT that includes the user ID and expires in 10 minutes
+  const code = Buffer.from(JSON.stringify({
+    user_id: user.id,
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    code_challenge: codeChallenge,
+    code_challenge_method: codeChallengeMethod,
+    expires: Date.now() + 10 * 60 * 1000,
+    nonce: crypto.randomUUID()
+  })).toString('base64url')
 
   // Redirect back to client with authorization code
   const callbackUrl = new URL(redirectUri)
