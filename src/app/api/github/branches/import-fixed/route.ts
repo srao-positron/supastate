@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { NextRequest, NextResponse } from 'next/server'
-import { createGitHubClient } from '@/lib/github/client'
 import { Octokit } from '@octokit/rest'
 
 export async function POST(request: NextRequest) {
@@ -90,7 +89,10 @@ export async function POST(request: NextRequest) {
       })
 
       if (tokenData) {
-        githubClient = await createGitHubClient(tokenData)
+        githubClient = new Octokit({
+          auth: tokenData,
+          userAgent: 'supastate-github-integration'
+        })
         hasAccess = true
       } else {
         return NextResponse.json(

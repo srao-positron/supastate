@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { Database } from '@/types/supabase'
 
 /**
  * Create a Supabase client for service-level operations
@@ -13,7 +12,7 @@ export function createServiceClient() {
     throw new Error('Missing Supabase environment variables')
   }
 
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

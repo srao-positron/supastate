@@ -51,7 +51,9 @@ export async function POST(request: NextRequest) {
       const { data: tokenData } = await supabase.rpc('get_github_token', {
         user_id
       })
-      token = tokenData
+      if (tokenData) {
+        token = tokenData
+      }
     }
 
     if (!token) {
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if repository exists
-    const { data: existingRepo } = await supabase
+    const { data: existingRepo } = await (supabase as any)
       .from('github_repositories')
       .select('id, crawl_status, last_crawled_at')
       .eq('full_name', full_name)
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
       repositoryId = existingRepo.id
 
       // Update repository metadata
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('github_repositories')
         .update({
           github_id: repoData.id,
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Create new repository
-      const { data: newRepo, error: createError } = await supabase
+      const { data: newRepo, error: createError } = await (supabase as any)
         .from('github_repositories')
         .insert({
           github_id: repoData.id,
