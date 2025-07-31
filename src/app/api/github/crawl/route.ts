@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createGitHubClient } from '@/lib/github/client'
 import { getDriver } from '@/lib/neo4j/client'
@@ -13,8 +13,6 @@ export async function POST(request: NextRequest) {
   let job_id: string | undefined
   
   try {
-    const supabase = await createClient()
-    
     // This endpoint requires service role authentication
     const authHeader = request.headers.get('authorization')
     if (!authHeader?.includes(process.env.SUPABASE_SERVICE_ROLE_KEY!)) {
@@ -23,6 +21,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    
+    // Use service client to bypass RLS
+    const supabase = await createServiceClient()
 
     const body = await request.json()
     job_id = body.job_id
@@ -34,34 +35,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Log start
-    await supabase.rpc('log_github_activity', {
-      p_function_name: 'github-crawl-api',
-      p_level: 'info',
-      p_message: 'Starting crawl job',
-      p_job_id: job_id
-    })
+    // Log start (commenting out to test)
+    // await supabase.rpc('log_github_activity', {
+    //   p_function_name: 'github-crawl-api',
+    //   p_level: 'info',
+    //   p_message: 'Starting crawl job',
+    //   p_job_id: job_id
+    // })
 
-    // Get job details
-    const { data: job, error: jobError } = await supabase
+    // Get job details - separate queries to avoid join issues
+    console.log('[GitHub Crawl API] Fetching job:', job_id)
+    
+    const { data: jobData, error: jobError } = await supabase
       .from('github_crawl_queue')
-      .select(`
-        *,
-        github_repositories!inner (
-          id,
-          full_name,
-          owner,
-          name,
-          default_branch,
-          private,
-          github_id
-        )
-      `)
+      .select('*')
       .eq('id', job_id)
       .single()
 
-    if (jobError || !job) {
-      throw new Error('Job not found')
+    if (jobError || !jobData) {
+      console.error('[GitHub Crawl API] Job fetch error:', jobError)
+      throw new Error(`Job not found: ${jobError?.message || 'Unknown error'}`)
+    }
+    
+    // Get repository details
+    const { data: repository, error: repoError } = await supabase
+      .from('github_repositories')
+      .select('*')
+      .eq('id', jobData.repository_id)
+      .single()
+      
+    if (repoError || !repository) {
+      console.error('[GitHub Crawl API] Repository fetch error:', repoError)
+      throw new Error(`Repository not found: ${repoError?.message || 'Unknown error'}`)
+    }
+    
+    // Combine the data
+    const job = {
+      ...jobData,
+      github_repositories: repository
     }
 
     // Mark job as processing
@@ -239,9 +250,11 @@ export async function POST(request: NextRequest) {
       // Determine what to crawl
       let crawlTargets = []
       if (job.crawl_type === 'initial' || job.crawl_type === 'manual') {
-        crawlTargets = ['issues']
+        crawlTargets = ['issues', 'pulls', 'commits', 'files']
       } else if (job.crawl_type === 'webhook') {
         crawlTargets = job.data.updates || []
+      } else if (job.crawl_type === 'update') {
+        crawlTargets = ['issues', 'pulls', 'commits']
       }
 
       // Crawl issues
@@ -334,6 +347,378 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Crawl pull requests
+      if (crawlTargets.includes('pulls')) {
+        await supabase.rpc('log_github_activity', {
+          p_function_name: 'github-crawl-api',
+          p_level: 'info',
+          p_message: 'Starting pull requests crawl',
+          p_job_id: job_id,
+          p_repository_full_name: job.github_repositories.full_name
+        })
+
+        try {
+          const pulls = await githubClient.listIssues(
+            job.github_repositories.owner,
+            job.github_repositories.name,
+            { state: 'all', per_page: 100 }
+          )
+          
+          apiCallCount++
+
+          // Filter for PRs (they come through issues API)
+          const pullRequests = pulls.filter((issue: any) => issue.pull_request)
+
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'info',
+            p_message: `Found ${pullRequests.length} pull requests to process`,
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_details: { pr_count: pullRequests.length }
+          })
+
+          for (const pr of pullRequests) {
+            // Get full PR details
+            const prDetails = await githubClient.getPullRequest(
+              job.github_repositories.owner,
+              job.github_repositories.name,
+              pr.number
+            )
+            apiCallCount++
+
+            const titleEmbedding = await generateEmbedding(pr.title)
+            const bodyEmbedding = pr.body ? await generateEmbedding(pr.body) : []
+
+            await session.run(
+              `
+              MERGE (pr:RepoPullRequest {id: $id})
+              SET pr += {
+                github_id: $github_id,
+                number: $number,
+                title: $title,
+                body: $body,
+                state: $state,
+                author: $author,
+                labels: $labels,
+                created_at: datetime($created_at),
+                updated_at: datetime($updated_at),
+                closed_at: $closed_at,
+                merged: $merged,
+                merged_at: $merged_at,
+                head_ref: $head_ref,
+                base_ref: $base_ref,
+                additions: $additions,
+                deletions: $deletions,
+                changed_files: $changed_files,
+                title_embedding: $title_embedding,
+                body_embedding: $body_embedding
+              }
+              WITH pr
+              MATCH (r:Repository {github_id: $repo_github_id})
+              MERGE (r)-[:HAS_PULL_REQUEST]->(pr)
+              `,
+              {
+                id: `${job.github_repositories.full_name}#${pr.number}`,
+                github_id: pr.id,
+                number: pr.number,
+                title: pr.title,
+                body: pr.body || '',
+                state: pr.state,
+                author: pr.user?.login || 'unknown',
+                labels: pr.labels.map((l: any) => l.name),
+                created_at: pr.created_at,
+                updated_at: pr.updated_at,
+                closed_at: pr.closed_at,
+                merged: prDetails.merged || false,
+                merged_at: prDetails.merged_at,
+                head_ref: prDetails.head?.ref || '',
+                base_ref: prDetails.base?.ref || '',
+                additions: prDetails.additions || 0,
+                deletions: prDetails.deletions || 0,
+                changed_files: prDetails.changed_files || 0,
+                title_embedding: titleEmbedding,
+                body_embedding: bodyEmbedding,
+                repo_github_id: repoData.id
+              }
+            )
+            entitiesProcessed.pull_requests++
+          }
+        } catch (error: any) {
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'error',
+            p_message: 'Failed to crawl pull requests',
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_error_code: error.status || 'UNKNOWN',
+            p_error_stack: error.stack,
+            p_details: { error: String(error) }
+          })
+          throw error
+        }
+      }
+
+      // Crawl commits
+      if (crawlTargets.includes('commits')) {
+        await supabase.rpc('log_github_activity', {
+          p_function_name: 'github-crawl-api',
+          p_level: 'info',
+          p_message: 'Starting commits crawl',
+          p_job_id: job_id,
+          p_repository_full_name: job.github_repositories.full_name
+        })
+
+        try {
+          // Get recent commits (last 100)
+          const commits = await githubClient.listCommits(
+            job.github_repositories.owner,
+            job.github_repositories.name,
+            { per_page: 100 }
+          )
+          
+          apiCallCount++
+
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'info',
+            p_message: `Found ${commits.length} commits to process`,
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_details: { commit_count: commits.length }
+          })
+
+          for (const commit of commits) {
+            const messageEmbedding = await generateEmbedding(commit.commit.message)
+
+            await session.run(
+              `
+              MERGE (c:RepoCommit {sha: $sha})
+              SET c += {
+                message: $message,
+                author: $author,
+                author_email: $author_email,
+                committed_at: datetime($committed_at),
+                additions: $additions,
+                deletions: $deletions,
+                message_embedding: $message_embedding
+              }
+              WITH c
+              MATCH (r:Repository {github_id: $repo_github_id})
+              MERGE (r)-[:HAS_COMMIT]->(c)
+              `,
+              {
+                sha: commit.sha,
+                message: commit.commit.message,
+                author: commit.commit.author?.name || 'unknown',
+                author_email: commit.commit.author?.email || '',
+                committed_at: commit.commit.author?.date || commit.commit.committer?.date,
+                additions: commit.stats?.additions || 0,
+                deletions: commit.stats?.deletions || 0,
+                message_embedding: messageEmbedding,
+                repo_github_id: repoData.id
+              }
+            )
+            entitiesProcessed.commits++
+          }
+        } catch (error: any) {
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'error',
+            p_message: 'Failed to crawl commits',
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_error_code: error.status || 'UNKNOWN',
+            p_error_stack: error.stack,
+            p_details: { error: String(error) }
+          })
+          throw error
+        }
+      }
+
+      // Crawl files and code content
+      if (crawlTargets.includes('files')) {
+        await supabase.rpc('log_github_activity', {
+          p_function_name: 'github-crawl-api',
+          p_level: 'info',
+          p_message: 'Starting code content crawl',
+          p_job_id: job_id,
+          p_repository_full_name: job.github_repositories.full_name
+        })
+
+        try {
+          // Get repository tree
+          const tree = await githubClient.getTree(
+            job.github_repositories.owner,
+            job.github_repositories.name,
+            job.github_repositories.default_branch || 'main',
+            true // recursive
+          )
+          
+          apiCallCount++
+
+          // Filter for code files
+          const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rs', '.cpp', '.c', '.h']
+          const codeFiles = tree.tree.filter((item: any) => 
+            item.type === 'blob' && 
+            codeExtensions.some(ext => item.path.endsWith(ext)) &&
+            item.size < 100000 // Skip large files
+          )
+
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'info',
+            p_message: `Found ${codeFiles.length} code files to process`,
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_details: { file_count: codeFiles.length }
+          })
+
+          // Process files in batches to avoid rate limits
+          const batchSize = 10
+          for (let i = 0; i < codeFiles.length; i += batchSize) {
+            const batch = codeFiles.slice(i, i + batchSize)
+            
+            for (const file of batch) {
+              try {
+                // Get file content
+                const content = await githubClient.getContent(
+                  job.github_repositories.owner,
+                  job.github_repositories.name,
+                  file.path
+                )
+                apiCallCount++
+
+                if (Array.isArray(content) || content.type !== 'file') continue
+
+                // Decode base64 content
+                const decodedContent = Buffer.from(content.content, 'base64').toString('utf-8')
+                
+                // For now, just store the file - parsing will come later
+                const contentEmbedding = await generateEmbedding(decodedContent.substring(0, 4000))
+
+                await session.run(
+                  `
+                  MERGE (f:RepoFile {id: $id})
+                  SET f += {
+                    path: $path,
+                    name: $name,
+                    type: 'code',
+                    language: $language,
+                    size: $size,
+                    content: $content,
+                    branch: $branch,
+                    commit_sha: $commit_sha,
+                    content_embedding: $content_embedding
+                  }
+                  WITH f
+                  MATCH (r:Repository {github_id: $repo_github_id})
+                  MERGE (r)-[:HAS_FILE]->(f)
+                  `,
+                  {
+                    id: `${job.github_repositories.full_name}#${file.path}`,
+                    path: file.path,
+                    name: file.path.split('/').pop(),
+                    language: file.path.split('.').pop(),
+                    size: file.size,
+                    content: decodedContent,
+                    branch: job.github_repositories.default_branch || 'main',
+                    commit_sha: content.sha,
+                    content_embedding: contentEmbedding,
+                    repo_github_id: repoData.id
+                  }
+                )
+                entitiesProcessed.files++
+              } catch (fileError: any) {
+                await supabase.rpc('log_github_activity', {
+                  p_function_name: 'github-crawl-api',
+                  p_level: 'warning',
+                  p_message: `Failed to process file ${file.path}`,
+                  p_job_id: job_id,
+                  p_repository_full_name: job.github_repositories.full_name,
+                  p_error_code: fileError.status || 'FILE_ERROR',
+                  p_details: { file: file.path, error: String(fileError) }
+                })
+              }
+            }
+
+            // Rate limit pause between batches
+            if (i + batchSize < codeFiles.length) {
+              await new Promise(resolve => setTimeout(resolve, 1000))
+            }
+          }
+        } catch (error: any) {
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'error',
+            p_message: 'Failed to crawl code content',
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_error_code: error.status || 'UNKNOWN',
+            p_error_stack: error.stack,
+            p_details: { error: String(error) }
+          })
+          // Don't throw - files are optional
+        }
+      }
+
+      // Install webhook for initial crawls
+      if (job.crawl_type === 'initial' && !job.github_repositories.webhook_id) {
+        await supabase.rpc('log_github_activity', {
+          p_function_name: 'github-crawl-api',
+          p_level: 'info',
+          p_message: 'Installing webhook for repository',
+          p_job_id: job_id,
+          p_repository_full_name: job.github_repositories.full_name
+        })
+
+        try {
+          // Generate webhook secret
+          const webhookSecret = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+          const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://supastate.com'}/api/github/webhook/${job.repository_id}`
+
+          const webhook = await githubClient.createWebhook(
+            job.github_repositories.owner,
+            job.github_repositories.name,
+            {
+              url: webhookUrl,
+              secret: webhookSecret
+            }
+          )
+          apiCallCount++
+
+          // Store webhook info
+          await supabase
+            .from('github_repositories')
+            .update({
+              webhook_id: webhook.id,
+              webhook_secret: webhookSecret,
+              webhook_installed_at: new Date().toISOString()
+            })
+            .eq('id', job.repository_id)
+
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'info',
+            p_message: 'Webhook installed successfully',
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_details: { webhook_id: webhook.id, webhook_url: webhookUrl }
+          })
+        } catch (webhookError: any) {
+          await supabase.rpc('log_github_activity', {
+            p_function_name: 'github-crawl-api',
+            p_level: 'warning',
+            p_message: 'Failed to install webhook',
+            p_job_id: job_id,
+            p_repository_full_name: job.github_repositories.full_name,
+            p_error_code: webhookError.status || 'WEBHOOK_ERROR',
+            p_details: { error: String(webhookError) }
+          })
+          // Don't throw - webhook is optional
+        }
+      }
+
       // Mark crawl as completed
       const duration = Date.now() - startTime
 
@@ -354,6 +739,9 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', job_id)
 
+      // Get final rate limit info
+      const finalRateLimitInfo = githubClient.getRateLimitInfo()
+      
       // Record crawl history
       await supabase
         .from('github_crawl_history')
@@ -364,7 +752,7 @@ export async function POST(request: NextRequest) {
           status: 'completed',
           duration_seconds: Math.floor(duration / 1000),
           api_calls_made: apiCallCount,
-          rate_limit_remaining: rateLimitInfo.remaining
+          rate_limit_remaining: finalRateLimitInfo.remaining
         })
 
       await supabase.rpc('log_github_activity', {
@@ -399,7 +787,7 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime
     
     if (job_id) {
-      const supabase = await createClient()
+      const supabase = await createServiceClient()
       
       await supabase.rpc('log_github_activity', {
         p_function_name: 'github-crawl-api',

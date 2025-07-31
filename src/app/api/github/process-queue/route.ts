@@ -1,10 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    
     // This endpoint requires service role authentication
     const authHeader = request.headers.get('authorization')
     if (!authHeader?.includes(process.env.SUPABASE_SERVICE_ROLE_KEY!)) {
@@ -13,6 +11,8 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    
+    const supabase = await createServiceClient()
 
     console.log('[GitHub Queue Processor] Starting...')
 
@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
           owner,
           name,
           default_branch,
-          private
+          private,
+          github_id
         )
       `)
       .eq('status', 'pending')
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
     for (const job of pendingJobs as any[]) {
       try {
         // Call the crawl API
-        const crawlResponse = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:3000'}/api/github/crawl`, {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        const crawlResponse = await fetch(`${appUrl}/api/github/crawl`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
