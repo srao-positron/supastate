@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { createHash } from 'https://deno.land/std@0.160.0/hash/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +60,7 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
+    
     // Verify request method
     if (req.method !== 'POST') {
       return new Response('Method not allowed', { 
@@ -80,7 +80,7 @@ serve(async (req) => {
     }
 
     // Use authenticated user's workspace
-    const workspaceId = `user:${user.id}`
+    const workspaceId = body.teamId ? `team:${body.teamId}` : `user:${user.id}`
     
     if (!body.projectName) {
       return new Response(
@@ -103,59 +103,71 @@ serve(async (req) => {
       }
     )
 
+    let savedCount = 0
     let queuedCount = 0
-    let skippedCount = 0
     let errorCount = 0
 
     // Process chunks
     for (const chunk of body.chunks) {
       try {
-        // Calculate content hash for deduplication
-        const contentHash = await createHash('sha256').update(chunk.content).digest('hex')
-        
-        // Check if already processed
-        const { data: existing } = await serviceClient
-          .from('processed_memories')
-          .select('id')
-          .eq('workspace_id', workspaceId)
-          .eq('project_name', body.projectName)
-          .eq('content_hash', contentHash)
+        // First save to memories table
+        const memoryData = {
+          content: chunk.content,
+          project_name: body.projectName,
+          chunk_id: chunk.chunkId,
+          session_id: chunk.sessionId,
+          type: 'general',
+          user_id: user.id,
+          team_id: body.teamId || null,
+          metadata: {
+            ...chunk.metadata,
+            source: 'camille',
+            projectName: body.projectName
+          }
+        }
+
+        // Try to insert, but handle duplicates gracefully
+        const { data: memory, error: memoryError } = await serviceClient
+          .from('memories')
+          .insert(memoryData)
+          .select()
           .single()
-          
-        if (existing) {
-          console.log(`[Ingest Memory] Skipping duplicate chunk: ${chunk.chunkId}`)
-          skippedCount++
+
+        if (memoryError) {
+          // Check if it's a duplicate error
+          if (memoryError.code === '23505' && memoryError.message.includes('memories_workspace_chunk_unique')) {
+            console.log(`[Ingest Memory] Memory already exists for chunk ${chunk.chunkId}, skipping...`)
+            // Skip this chunk - it's already been processed
+            continue
+          } else {
+            console.error(`[Ingest Memory] Failed to save memory ${chunk.chunkId}:`, memoryError)
+            errorCount++
+            continue
+          }
+        }
+
+        if (!memory) {
+          errorCount++
           continue
         }
 
-        // Prepare metadata with all relevant information
-        const queueMetadata = {
-          ...chunk.metadata,
-          projectName: body.projectName,
-          teamId: body.teamId,
-          contentHash
-        }
+        savedCount++
 
-        // Add to memory queue
-        const { error } = await serviceClient
-          .from('memory_queue')
-          .upsert({
+        // Queue for Neo4j ingestion using pgmq
+        const { data: msgId, error: queueError } = await serviceClient.rpc('pgmq_send', {
+          queue_name: 'memory_ingestion',
+          msg: {
+            memory_id: memory.id,
+            user_id: user.id,
             workspace_id: workspaceId,
-            session_id: chunk.sessionId,
-            chunk_id: chunk.chunkId,
-            content: chunk.content,
-            content_hash: contentHash,
-            metadata: queueMetadata,
-            status: 'pending',
-            created_at: new Date().toISOString()
-          }, {
-            onConflict: 'workspace_id,chunk_id',
-            ignoreDuplicates: false
-          })
+            content: memory.content,
+            metadata: memory.metadata || {}
+          }
+        })
 
-        if (error) {
-          console.error(`[Ingest Memory] Failed to queue chunk ${chunk.chunkId}:`, error)
-          errorCount++
+        if (queueError) {
+          console.error(`[Ingest Memory] Failed to queue memory ${memory.id}:`, queueError)
+          // Don't fail - memory is saved in Supabase
         } else {
           queuedCount++
         }
@@ -165,14 +177,14 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[Ingest Memory] Queued ${queuedCount}, skipped ${skippedCount}, errors ${errorCount}`)
+    console.log(`[Ingest Memory] Saved ${savedCount}, queued ${queuedCount}, errors ${errorCount}`)
 
     // Return response
     return new Response(
       JSON.stringify({
         success: true,
+        saved: savedCount,
         queued: queuedCount,
-        skipped: skippedCount,
         errors: errorCount,
         message: `Processed ${body.chunks.length} chunks`
       }),

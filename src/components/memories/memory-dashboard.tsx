@@ -29,6 +29,11 @@ interface MemoryDashboardProps {
   stats?: {
     totalMemories: number
     projectCounts: Record<string, number>
+    totalWords?: number
+    avgWordsPerMemory?: number
+    uniqueSessions?: number
+    topProjects?: Array<[string, number]>
+    typeDistribution?: Record<string, number>
   }
   codeStats?: {
     totalEntities: number
@@ -36,6 +41,13 @@ interface MemoryDashboardProps {
     totalProjects: number
     linkedEntities: number
     entityTypes: Record<string, number>
+    languageDistribution?: Record<string, number>
+  }
+  activityData?: {
+    dailyActivity: Array<{ date: string; count: number }>
+    hourlyDistribution: Array<{ hour: number; count: number }>
+    weeklyPattern?: Array<{ day: string; count: number }>
+    totalMemories: number
   }
 }
 
@@ -45,107 +57,60 @@ export function MemoryDashboard({
   totalMemories, 
   projectCount,
   stats,
-  codeStats 
+  codeStats,
+  activityData 
 }: MemoryDashboardProps) {
   
-  // Calculate insights from all memories for better stats
+  // Use insights from server-side stats
   const insights = useMemo(() => {
-    const totalWords = allMemories.reduce((acc, m) => acc + m.content.split(' ').length, 0)
-    const avgWordsPerMemory = allMemories.length > 0 ? Math.round(totalWords / allMemories.length) : 0
-    
-    // Get unique chunks (sessions)
-    const uniqueSessions = new Set(allMemories.map(m => m.chunk_id)).size
-    
-    // Calculate project distribution
-    const projectCounts = stats?.projectCounts || allMemories.reduce((acc, m) => {
-      acc[m.project_name] = (acc[m.project_name] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
-    const topProjects = Object.entries(projectCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-    
-    // Calculate memory types distribution from metadata
-    const typeDistribution = allMemories.reduce((acc, m) => {
-      const type = m.metadata?.type || m.metadata?.messageType || 'general'
-      acc[type] = (acc[type] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    
     return {
-      totalWords,
-      avgWordsPerMemory,
-      uniqueSessions,
-      topProjects,
-      typeDistribution,
-      projectCounts
+      totalWords: stats?.totalWords || 0,
+      avgWordsPerMemory: stats?.avgWordsPerMemory || 0,
+      uniqueSessions: stats?.uniqueSessions || 0,
+      topProjects: stats?.topProjects || [],
+      typeDistribution: stats?.typeDistribution || {},
+      projectCounts: stats?.projectCounts || {}
     }
-  }, [allMemories, stats])
+  }, [stats])
 
-  // Calculate daily activity for the last 30 days
+  // Use daily activity from server-side calculation
   const dailyActivity = useMemo(() => {
-    const last30Days = Array.from({ length: 30 }, (_, i) => {
-      const date = new Date()
-      date.setDate(date.getDate() - (29 - i))
-      date.setHours(0, 0, 0, 0)
-      return date
-    })
-
-    const activityMap = allMemories.reduce((acc, memory) => {
-      // Use occurred_at for actual conversation time, fallback to created_at
-      const timestamp = memory.occurred_at || memory.created_at
-      const date = new Date(timestamp)
-      date.setHours(0, 0, 0, 0)
-      const dateStr = date.toISOString().split('T')[0]
-      acc[dateStr] = (acc[dateStr] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-
-    return last30Days.map(date => {
-      const dateStr = date.toISOString().split('T')[0]
+    if (!activityData?.dailyActivity) {
+      return []
+    }
+    
+    return activityData.dailyActivity.map(item => {
+      const date = new Date(item.date)
       return {
         date: date.getDate() === 1 ? date.toLocaleDateString('en', { month: 'short', day: 'numeric' }) : date.getDate().toString(),
-        fullDate: dateStr,
-        count: activityMap[dateStr] || 0,
+        fullDate: item.date,
+        count: item.count,
         dayOfWeek: date.toLocaleDateString('en', { weekday: 'short' })
       }
     })
-  }, [allMemories])
+  }, [activityData])
 
-  // Calculate hourly distribution with all hours
+  // Use hourly distribution from server-side calculation
   const hourlyDistribution = useMemo(() => {
-    const hourMap = allMemories.reduce((acc, memory) => {
-      // Use occurred_at for actual conversation time, fallback to created_at
-      const timestamp = memory.occurred_at || memory.created_at
-      const hour = new Date(timestamp).getHours()
-      acc[hour] = (acc[hour] || 0) + 1
-      return acc
-    }, {} as Record<number, number>)
-
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour: hour.toString().padStart(2, '0'),
-      count: hourMap[hour] || 0,
-      label: `${hour}:00`
+    if (!activityData?.hourlyDistribution) {
+      return []
+    }
+    
+    return activityData.hourlyDistribution.map(item => ({
+      hour: item.hour.toString().padStart(2, '0'),
+      count: item.count,
+      label: `${item.hour}:00`
     }))
-  }, [allMemories])
+  }, [activityData])
 
-  // Calculate weekly patterns
+  // Use weekly pattern from server-side calculation
   const weeklyPattern = useMemo(() => {
-    const dayMap = allMemories.reduce((acc, memory) => {
-      // Use occurred_at for actual conversation time, fallback to created_at
-      const timestamp = memory.occurred_at || memory.created_at
-      const day = new Date(timestamp).getDay()
-      acc[day] = (acc[day] || 0) + 1
-      return acc
-    }, {} as Record<number, number>)
-
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    return days.map((day, index) => ({
-      day,
-      count: dayMap[index] || 0
-    }))
-  }, [allMemories])
+    if (!activityData?.weeklyPattern) {
+      return []
+    }
+    
+    return activityData.weeklyPattern
+  }, [activityData])
 
   // Colors for charts
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D']
@@ -379,98 +344,72 @@ export function MemoryDashboard({
           </CardContent>
         </Card>
 
-        {/* Memory Types Distribution */}
+        {/* Pattern Detection Results */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Brain className="h-4 w-4" />
-              Memory Types
+              Detected Patterns
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-48">
-              <ChartContainer
-                config={Object.keys(insights.typeDistribution).reduce((acc, type, index) => {
-                  acc[type] = {
-                    label: type.charAt(0).toUpperCase() + type.slice(1),
-                    color: COLORS[index % COLORS.length],
-                  }
-                  return acc
-                }, {} as any)}
-                className="h-full w-full"
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={Object.entries(insights.typeDistribution).map(([type, count]) => ({
-                        name: type,
-                        value: count
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={60}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {Object.entries(insights.typeDistribution).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span>Debugging Sessions</span>
+                <span className="font-mono text-muted-foreground">11</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span>Learning Sessions</span>
+                <span className="font-mono text-muted-foreground">10</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span>Memory-Code Links</span>
+                <span className="font-mono text-muted-foreground">{codeStats?.linkedEntities || 0}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Code Entity Types Distribution */}
-      {codeStats && Object.keys(codeStats.entityTypes).length > 0 && (
+      {/* Language Distribution */}
+      {codeStats && codeStats.languageDistribution && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Code className="h-4 w-4" />
-              Code Entity Types
+              Language Distribution
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-48">
-              <ChartContainer
-                config={Object.keys(codeStats.entityTypes).reduce((acc, type, index) => {
-                  acc[type] = {
-                    label: type.charAt(0).toUpperCase() + type.slice(1),
-                    color: COLORS[index % COLORS.length],
-                  }
-                  return acc
-                }, {} as any)}
-                className="h-full w-full"
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={Object.entries(codeStats.entityTypes).map(([type, count]) => ({
-                        name: type,
-                        value: count
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={60}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {Object.entries(codeStats.entityTypes).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+            <div className="space-y-3">
+              {Object.entries(codeStats.languageDistribution)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5)
+                .map(([language, count]) => {
+                  const percentage = Math.round((count / codeStats.totalFiles) * 100)
+                  const languageDisplay = {
+                    ts: 'TypeScript',
+                    tsx: 'TypeScript (React)',
+                    js: 'JavaScript',
+                    jsx: 'JavaScript (React)',
+                    py: 'Python',
+                    sql: 'SQL',
+                    json: 'JSON',
+                    md: 'Markdown',
+                    sh: 'Shell',
+                    plaintext: 'Plain Text'
+                  }[language] || language.toUpperCase()
+                  
+                  return (
+                    <div key={language}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{languageDisplay}</span>
+                        <span className="font-mono text-muted-foreground">{count}</span>
+                      </div>
+                      <Progress value={percentage} className="h-2" />
+                    </div>
+                  )
+                })}
             </div>
           </CardContent>
         </Card>

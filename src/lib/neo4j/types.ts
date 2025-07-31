@@ -5,6 +5,7 @@ export interface MemoryNode {
   content: string
   embedding: number[]
   project_name: string
+  workspace_id?: string
   user_id?: string
   team_id?: string
   chunk_id?: string

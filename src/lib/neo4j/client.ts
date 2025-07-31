@@ -1,5 +1,6 @@
 import neo4j, { Driver, Session, ManagedTransaction } from 'neo4j-driver'
 import { log } from '@/lib/logger'
+import { serializeNeo4jData } from '@/lib/utils/neo4j-serializer'
 
 // Create a singleton driver instance
 let driver: Driver | null = null
@@ -82,7 +83,7 @@ export async function executeQuery<T = any>(
     const processedParams = parameters ? Object.entries(parameters).reduce((acc, [key, value]) => {
       // Convert numeric parameters that Neo4j expects as integers
       if ((key.toLowerCase() === 'limit' || key.toLowerCase() === 'skip' || key.toLowerCase() === 'offset') && typeof value === 'number') {
-        acc[key] = Math.floor(value)
+        acc[key] = neo4j.int(Math.floor(value))
       } else {
         acc[key] = value
       }
@@ -96,7 +97,7 @@ export async function executeQuery<T = any>(
     })
     const result = await driver.executeQuery(query, processedParams, { database })
     return {
-      records: result.records.map(record => record.toObject()),
+      records: result.records.map(record => serializeNeo4jData(record.toObject())),
       summary: result.summary
     }
   } catch (error) {

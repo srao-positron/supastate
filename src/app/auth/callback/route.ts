@@ -57,9 +57,46 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     
-    if (!error) {
+    if (!error && data?.session) {
+      // Debug: Log what we receive from Supabase
+      console.log('[Auth Callback] Session data:', {
+        hasProviderToken: !!data.session.provider_token,
+        hasProviderRefreshToken: !!data.session.provider_refresh_token,
+        userMetadata: data.session.user?.user_metadata,
+        sessionKeys: Object.keys(data.session)
+      })
+      
+      // Capture GitHub access token if available
+      const providerToken = data.session.provider_token
+      const providerRefreshToken = data.session.provider_refresh_token
+      
+      if (providerToken) {
+        console.log('[Auth Callback] Storing GitHub token for user')
+        
+        // Get user info to extract GitHub username and scopes
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          // Store the GitHub token securely
+          const { error: storeError } = await supabase.rpc('store_github_token', {
+            user_id: user.id,
+            token: providerToken,
+            scopes: ['read:user', 'user:email', 'repo'], // These were requested in the OAuth flow
+            username: user.user_metadata?.user_name || null
+          })
+          
+          if (storeError) {
+            console.error('[Auth Callback] Failed to store GitHub token:', storeError)
+          } else {
+            console.log('[Auth Callback] GitHub token stored successfully')
+          }
+        }
+      } else {
+        console.log('[Auth Callback] No provider token in session')
+      }
+      
       // Successful authentication
       return NextResponse.redirect(`${origin}${next}`)
     } else {

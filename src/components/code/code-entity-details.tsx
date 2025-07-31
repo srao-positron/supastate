@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import Editor from '@monaco-editor/react'
+import { RelatedCode } from './related-code'
 
 interface CodeEntity {
   id: string
@@ -22,6 +24,7 @@ interface CodeEntity {
     language: string
   }
   projectName: string
+  content?: string
 }
 
 interface LinkedMemory {
@@ -47,10 +50,13 @@ interface CodeEntityDetailsProps {
 export function CodeEntityDetails({ entity, isOpen, onClose }: CodeEntityDetailsProps) {
   const [linkedMemories, setLinkedMemories] = useState<LinkedMemory[]>([])
   const [loadingMemories, setLoadingMemories] = useState(false)
+  const [entityCode, setEntityCode] = useState<string>('')
+  const [loadingCode, setLoadingCode] = useState(false)
 
   useEffect(() => {
     if (entity && isOpen) {
       fetchLinkedMemories()
+      fetchEntityCode()
     }
   }, [entity, isOpen])
 
@@ -72,6 +78,28 @@ export function CodeEntityDetails({ entity, isOpen, onClose }: CodeEntityDetails
       setLinkedMemories([])
     } finally {
       setLoadingMemories(false)
+    }
+  }
+
+  const fetchEntityCode = async () => {
+    if (!entity || !entity.file) return
+    
+    try {
+      setLoadingCode(true)
+      const response = await fetch(`/api/code/${entity.id}/content`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch entity code')
+      }
+      
+      const data = await response.json()
+      setEntityCode(data.content || '')
+    } catch (error) {
+      console.error('Failed to fetch entity code:', error)
+      // If API doesn't exist yet, use the entity content if available
+      setEntityCode(entity.content || '')
+    } finally {
+      setLoadingCode(false)
     }
   }
 
@@ -119,10 +147,13 @@ export function CodeEntityDetails({ entity, isOpen, onClose }: CodeEntityDetails
         </SheetHeader>
 
         <Tabs defaultValue="details" className="mt-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="code">
+              Code
+            </TabsTrigger>
             <TabsTrigger value="memories">
-              Linked Memories
+              Memories
               {linkedMemories.length > 0 && (
                 <Badge variant="secondary" className="ml-2 h-5 px-1">
                   {linkedMemories.length}
@@ -181,6 +212,59 @@ export function CodeEntityDetails({ entity, isOpen, onClose }: CodeEntityDetails
               <h3 className="text-sm font-medium text-muted-foreground mb-2">Project</h3>
               <p className="text-sm">{entity.projectName}</p>
             </div>
+
+            <RelatedCode 
+              entityId={entity.id} 
+              onEntityClick={(relatedEntity) => {
+                // For now, just log - could be enhanced to navigate to the entity
+                console.log('Related entity clicked:', relatedEntity)
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="code" className="mt-4">
+            {loadingCode ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : entityCode ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
+                  <span>Lines {entity.lineStart || 1} - {entity.lineEnd || 'end'}</span>
+                  <span className="font-mono">{entity.file?.language || 'text'}</span>
+                </div>
+                <div className="border rounded-lg overflow-hidden">
+                  <Editor
+                    height="400px"
+                    language={entity.file?.language || 'typescript'}
+                    value={entityCode}
+                    theme="vs-dark"
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      lineNumbers: 'on',
+                      glyphMargin: false,
+                      folding: false,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 3,
+                      renderLineHighlight: 'none',
+                      scrollbar: {
+                        vertical: 'auto',
+                        horizontal: 'auto'
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FileCode className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No code content available
+                </p>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="memories" className="mt-4">

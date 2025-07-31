@@ -29,8 +29,12 @@ function getNeo4jDriver() {
 
 async function generateSummary(projectName: string, memories: any[]): Promise<string> {
   const recentMemories = memories
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 30) // Take most recent 30 memories for better focus
+    .sort((a, b) => {
+      const dateA = new Date(a.occurred_at || a.created_at).getTime()
+      const dateB = new Date(b.occurred_at || b.created_at).getTime()
+      return dateB - dateA
+    })
+    .slice(0, 100) // Take most recent 100 memories for better context
     .map(m => m.content)
     .join('\n\n')
 
@@ -167,14 +171,17 @@ serve(async (req, connInfo) => {
           WHERE m.project_name = $project_name
             AND (m.team_id = $workspace_id OR m.user_id = $workspace_id)
             ${memoryTimeFilter}
-          RETURN m.content as content, m.created_at as created_at
-          ORDER BY m.created_at DESC
+          RETURN m.content as content, 
+                 m.created_at as created_at,
+                 m.occurred_at as occurred_at
+          ORDER BY COALESCE(m.occurred_at, m.created_at) DESC
           LIMIT 100
         `, { project_name, workspace_id })
         
         const memories = memoriesResult.records.map(record => ({
           content: record.get('content'),
-          created_at: record.get('created_at').toString()
+          created_at: record.get('created_at').toString(),
+          occurred_at: record.get('occurred_at')?.toString() || null
         }))
         
         if (!memories || memories.length === 0) {

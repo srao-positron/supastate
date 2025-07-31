@@ -5,6 +5,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getAuthCallbackUrl } from '@/lib/utils/url'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
     options: {
-      redirectTo: 'https://www.supastate.ai/auth/callback',
+      redirectTo: getAuthCallbackUrl(),
       scopes: 'read:user user:email',
       queryParams: {
         access_type: 'offline',
@@ -37,14 +38,20 @@ export async function GET(request: Request) {
   const response = NextResponse.redirect(data.url)
   
   // Set a cookie that works across subdomains
-  response.cookies.set('cli_auth_session', JSON.stringify({ port, isCli: true, timestamp: Date.now() }), {
+  const cookieOptions: any = {
     httpOnly: true,
-    secure: true, // Always use secure in production
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 600, // 10 minutes
     path: '/',
-    domain: '.supastate.ai' // This makes it available to both www.supastate.ai and supastate.ai
-  })
+  }
+  
+  // Only set domain in production
+  if (process.env.NODE_ENV === 'production') {
+    cookieOptions.domain = '.supastate.ai'
+  }
+  
+  response.cookies.set('cli_auth_session', JSON.stringify({ port, isCli: true, timestamp: Date.now() }), cookieOptions)
   
   return response
 }

@@ -1,0 +1,5 @@
+#!/bin/bash
+camille server stop
+rm -rf ~/.camille/memory
+rm -rf ~/.camille/cache
+camille server start

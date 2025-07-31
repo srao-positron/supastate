@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { neo4jService } from '@/lib/neo4j/service'
 import { log } from '@/lib/logger'
+import { getOwnershipFilter, getOwnershipParams } from '@/lib/neo4j/query-patterns'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,13 @@ export async function GET(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    // Get user's team
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('team_id')
+      .eq('id', user.id)
+      .single()
 
     // Initialize Neo4j service
     try {
@@ -28,26 +36,22 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Get total memory count
+    // Get total memory count using proper ownership filter
     const totalResult = await neo4jService.executeQuery(`
       MATCH (m:Memory)
-      WHERE m.user_id = $userId OR m.team_id = $userId
+      WHERE ${getOwnershipFilter({ userId: user.id, workspaceId: profile?.team_id ? `team:${profile.team_id}` : undefined, teamId: profile?.team_id, nodeAlias: 'm' })}
       RETURN count(m) as total
-    `, {
-      userId: user.id
-    })
+    `, getOwnershipParams({ userId: user.id, workspaceId: profile?.team_id ? `team:${profile.team_id}` : undefined, teamId: profile?.team_id }))
 
     const totalMemories = totalResult.records[0]?.total?.toNumber() || 0
 
-    // Get project counts
+    // Get project counts using proper ownership filter
     const projectResult = await neo4jService.executeQuery(`
       MATCH (m:Memory)
-      WHERE m.user_id = $userId OR m.team_id = $userId
+      WHERE ${getOwnershipFilter({ userId: user.id, workspaceId: profile?.team_id ? `team:${profile.team_id}` : undefined, teamId: profile?.team_id, nodeAlias: 'm' })}
       RETURN m.project_name as project, count(m) as count
       ORDER BY count DESC
-    `, {
-      userId: user.id
-    })
+    `, getOwnershipParams({ userId: user.id, workspaceId: profile?.team_id ? `team:${profile.team_id}` : undefined, teamId: profile?.team_id }))
 
     const projectCounts: Record<string, number> = {}
     projectResult.records.forEach((record: any) => {

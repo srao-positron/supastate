@@ -1,32 +1,22 @@
-import OpenAI from 'openai'
+import neo4j from 'neo4j-driver'
 import { executeQuery, writeTransaction } from './client'
 import { MemoryNode, CodeEntityNode, MemoryRelationType } from './types'
 import { neo4jService } from './service'
 import { relationshipInferenceEngine } from './relationship-inference'
 import { log } from '@/lib/logger'
+import { embeddingsService } from '@/lib/embeddings/service'
+import { generateContextAwareEmbedding } from './pattern-discovery/detectors/sequence-aware-detector'
 
-export class IngestionService {
-  private openai: OpenAI | null = null
-
-  private getOpenAI(): OpenAI {
-    if (!this.openai) {
-      const apiKey = process.env.OPENAI_API_KEY
-      if (!apiKey) {
-        throw new Error('OPENAI_API_KEY environment variable is required')
-      }
-      this.openai = new OpenAI({ apiKey })
-    }
-    return this.openai
-  }
-  /**
-   * Ingest a memory into Neo4j with embeddings and relationships
-   */
-  async ingestMemory(memory: {
+/**
+ * Ingest a memory into Neo4j with embeddings and relationships
+ */
+export async function ingestMemory(memory: {
     id?: string
     content: string
     project_name: string
     user_id?: string
     team_id?: string
+    workspace_id?: string
     type?: string
     metadata?: Record<string, any>
     chunk_id?: string
@@ -35,6 +25,7 @@ export class IngestionService {
     topics?: string[]
     entities_mentioned?: string[]
     tools_used?: string[]
+    occurred_at?: string
   }, options: {
     useInferenceEngine?: boolean
     inferEvolution?: boolean
@@ -43,31 +34,50 @@ export class IngestionService {
       projectName: memory.project_name,
       hasUserId: !!memory.user_id,
       hasTeamId: !!memory.team_id,
-      type: memory.type
+      userId: memory.user_id,
+      teamId: memory.team_id,
+      workspaceId: memory.workspace_id,
+      type: memory.type,
+      hasOccurredAt: !!memory.occurred_at,
+      occurredAt: memory.occurred_at,
+      contentPreview: memory.content.substring(0, 100) + '...'
     })
     
     // 1. Generate embedding for the memory content
-    const embedding = await this.generateEmbedding(memory.content)
+    log.info('Generating embedding for memory', {
+      contentLength: memory.content.length,
+      hasChunkContext: !!(memory.chunk_id && memory.session_id),
+      contentPreview: memory.content.substring(0, 50) + '...'
+    })
+    const embedding = await generateEmbedding(memory.content, {
+      chunk_id: memory.chunk_id,
+      session_id: memory.session_id
+    })
+    log.info('Embedding generated successfully', {
+      dimensions: embedding.length
+    })
     
     // 2. Create memory node in Neo4j
-    const memoryNode = await this.createMemoryNode({
+    const memoryNode = await createMemoryNode({
       ...memory,
       id: memory.id || crypto.randomUUID(),
       embedding,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      occurred_at: memory.occurred_at,
+      workspace_id: memory.workspace_id
     })
     
     // 3. Infer and create relationships
-    await this.inferMemoryRelationships(memoryNode)
+    await inferMemoryRelationships(memoryNode)
     
     // 4. Create project relationship
-    await this.ensureProjectExists(memory.project_name)
-    await this.createProjectRelationship(memoryNode.id, memory.project_name)
+    await ensureProjectExists(memory.project_name)
+    await createProjectRelationship(memoryNode.id, memory.project_name)
     
     // 5. Create user relationship if user_id provided
     if (memory.user_id) {
-      await this.createUserRelationship(memory.user_id, memoryNode.id)
+      await createUserRelationship(memory.user_id, memoryNode.id)
     }
     
     // 6. Use inference engine if enabled
@@ -97,10 +107,10 @@ export class IngestionService {
     return memoryNode
   }
 
-  /**
-   * Ingest a memory with pre-computed embeddings (for migration)
-   */
-  async ingestMemoryWithEmbedding(memory: {
+/**
+ * Ingest a memory with pre-computed embeddings (for migration)
+ */
+export async function ingestMemoryWithEmbedding(memory: {
     id?: string
     content: string
     embedding: number[]
@@ -127,7 +137,7 @@ export class IngestionService {
     })
     
     // 1. Create memory node in Neo4j with provided embedding
-    const memoryNode = await this.createMemoryNode({
+    const memoryNode = await createMemoryNode({
       ...memory,
       id: memory.id || crypto.randomUUID(),
       embedding: memory.embedding,
@@ -137,15 +147,15 @@ export class IngestionService {
     })
     
     // 2. Infer and create relationships
-    await this.inferMemoryRelationships(memoryNode)
+    await inferMemoryRelationships(memoryNode)
     
     // 3. Create project relationship
-    await this.ensureProjectExists(memory.project_name)
-    await this.createProjectRelationship(memoryNode.id, memory.project_name)
+    await ensureProjectExists(memory.project_name)
+    await createProjectRelationship(memoryNode.id, memory.project_name)
     
     // 4. Create user relationship if user_id provided
     if (memory.user_id) {
-      await this.createUserRelationship(memory.user_id, memoryNode.id)
+      await createUserRelationship(memory.user_id, memoryNode.id)
     }
     
     // 5. Use inference engine if enabled
@@ -167,17 +177,19 @@ export class IngestionService {
   }
 
   /**
-   * Generate embedding using OpenAI
+   * Generate embedding with context awareness
    */
-  protected async generateEmbedding(text: string): Promise<number[]> {
+async function generateEmbedding(
+    text: string, 
+    context?: { chunk_id?: string, session_id?: string }
+  ): Promise<number[]> {
     try {
-      const openai = this.getOpenAI()
-      const response = await openai.embeddings.create({
-        model: 'text-embedding-3-large',
-        input: text,
-        dimensions: 3072
-      })
-      return response.data[0].embedding
+      if (context?.chunk_id && context?.session_id) {
+        // Use context-aware embedding for better semantic representation
+        return generateContextAwareEmbedding({ content: text, ...context })
+      }
+      // Fall back to standard embedding
+      return embeddingsService.generateEmbedding(text)
     } catch (error) {
       log.error('Embedding generation failed', error)
       throw error
@@ -187,7 +199,7 @@ export class IngestionService {
   /**
    * Generate content hash for memory deduplication
    */
-  private async generateMemoryContentHash(memory: {
+async function generateMemoryContentHash(memory: {
     content: string,
     project_name: string,
     occurred_at?: string
@@ -213,17 +225,23 @@ export class IngestionService {
   /**
    * Create memory node in Neo4j
    */
-  private async createMemoryNode(data: Partial<MemoryNode> & { 
+async function createMemoryNode(data: Partial<MemoryNode> & { 
     id: string, 
     content: string, 
     embedding: number[],
     chunk_id?: string
   }): Promise<MemoryNode> {
     // Generate content hash for deduplication
-    const contentHash = await this.generateMemoryContentHash({
+    const contentHash = await generateMemoryContentHash({
       content: data.content,
       project_name: data.project_name!,
-      occurred_at: (data as any).occurred_at
+      occurred_at: data.occurred_at
+    })
+    
+    log.info('Generated content hash for deduplication', {
+      contentHash,
+      projectName: data.project_name,
+      occurredAt: data.occurred_at
     })
     
     // First check if memory with this hash already exists
@@ -241,7 +259,13 @@ export class IngestionService {
       log.info('Found existing memory with same content hash', {
         existingId: existingMemory.id,
         newId: data.id,
-        contentHash
+        contentHash,
+        existingWorkspaceId: existingMemory.workspace_id,
+        existingUserId: existingMemory.user_id,
+        existingOccurredAt: existingMemory.occurred_at,
+        newWorkspaceId: data.workspace_id,
+        newUserId: data.user_id,
+        newOccurredAt: data.occurred_at
       })
       
       // Update the existing memory with new metadata if needed
@@ -292,6 +316,7 @@ export class IngestionService {
         content_hash: $contentHash,
         embedding: $embedding,
         project_name: $project_name,
+        workspace_id: $workspace_id,
         user_id: $user_id,
         team_id: $team_id,
         type: $type,
@@ -310,22 +335,29 @@ export class IngestionService {
       contentHash,
       embedding: data.embedding,
       project_name: data.project_name,
+      workspace_id: data.workspace_id || null,
       user_id: data.user_id || null,
       team_id: data.team_id || null,
       type: data.type || 'general',
       chunk_id: data.chunk_id || null,
-      created_at: data.created_at,
-      occurred_at: (data as any).occurred_at || data.created_at,
-      updated_at: data.updated_at,
+      created_at: neo4j.DateTime.fromStandardDate(new Date(data.created_at!)),
+      occurred_at: neo4j.DateTime.fromStandardDate(new Date(data.occurred_at || data.created_at!)),
+      updated_at: neo4j.DateTime.fromStandardDate(new Date(data.updated_at!)),
       metadata: JSON.stringify(data.metadata || {})
     }
 
-    log.debug('Creating memory node', {
+    log.info('Creating memory node with params', {
       id: params.id,
       projectName: params.project_name,
+      workspaceId: params.workspace_id,
+      userId: params.user_id,
+      teamId: params.team_id,
+      occurredAt: params.occurred_at,
+      createdAt: params.created_at,
       embeddingDimensions: params.embedding.length,
       contentPreview: params.content.substring(0, 50) + '...',
-      contentHash
+      contentHash,
+      type: params.type
     })
 
     const result = await executeQuery(query, params)
@@ -338,11 +370,20 @@ export class IngestionService {
     const record = result.records[0]
     const node = record.m
     
+    log.info('Memory node created successfully', {
+      id: node.id,
+      workspaceId: node.workspace_id,
+      userId: node.user_id,
+      occurredAt: node.occurred_at,
+      createdAt: node.created_at
+    })
+    
     return {
       id: node.id,
       content: node.content,
       embedding: node.embedding,
       project_name: node.project_name,
+      workspace_id: node.workspace_id,
       user_id: node.user_id,
       team_id: node.team_id,
       type: node.type,
@@ -357,26 +398,26 @@ export class IngestionService {
   /**
    * Infer relationships between this memory and existing code/memories
    */
-  private async inferMemoryRelationships(memory: MemoryNode): Promise<void> {
+async function inferMemoryRelationships(memory: MemoryNode): Promise<void> {
     // 1. Find similar memories to establish PRECEDED_BY relationships
-    await this.findAndLinkPrecedingMemories(memory)
+    await findAndLinkPrecedingMemories(memory)
     
     // 2. Find related code entities based on content analysis
-    await this.findAndLinkRelatedCode(memory)
+    await findAndLinkRelatedCode(memory)
     
     // 3. Detect if this is a debugging session
-    if (this.isDebuggingMemory(memory.content)) {
-      await this.createDebugSession(memory)
+    if (isDebuggingMemory(memory.content)) {
+      await createDebugSession(memory)
     }
     
     // 4. Extract and link concepts
-    await this.extractAndLinkConcepts(memory)
+    await extractAndLinkConcepts(memory)
   }
 
   /**
    * Find memories that this one might be preceded by
    */
-  private async findAndLinkPrecedingMemories(memory: MemoryNode): Promise<void> {
+async function findAndLinkPrecedingMemories(memory: MemoryNode): Promise<void> {
     try {
       // Find recent memories from the same project
       const query = `
@@ -416,9 +457,9 @@ export class IngestionService {
   /**
    * Find and link related code based on memory content
    */
-  private async findAndLinkRelatedCode(memory: MemoryNode): Promise<void> {
+async function findAndLinkRelatedCode(memory: MemoryNode): Promise<void> {
     // Extract potential code references from content
-    const codeReferences = this.extractCodeReferences(memory.content)
+    const codeReferences = extractCodeReferences(memory.content)
     
     for (const ref of codeReferences) {
       const query = `
@@ -446,7 +487,7 @@ export class IngestionService {
   /**
    * Extract code entity references from memory content
    */
-  private extractCodeReferences(content: string): string[] {
+function extractCodeReferences(content: string): string[] {
     const references: string[] = []
     
     // Function/class names (CamelCase or snake_case)
@@ -467,7 +508,7 @@ export class IngestionService {
   /**
    * Check if this is a debugging memory
    */
-  private isDebuggingMemory(content: string): boolean {
+function isDebuggingMemory(content: string): boolean {
     const debugKeywords = [
       'error', 'bug', 'fix', 'debug', 'issue', 'problem', 
       'exception', 'crash', 'failed', 'broken', 'stack trace'
@@ -479,7 +520,7 @@ export class IngestionService {
   /**
    * Create a debug session for debugging memories
    */
-  private async createDebugSession(memory: MemoryNode): Promise<void> {
+async function createDebugSession(memory: MemoryNode): Promise<void> {
     const query = `
       CREATE (ds:DebugSession {
         id: randomUUID(),
@@ -502,10 +543,10 @@ export class IngestionService {
   /**
    * Extract and link concepts from memory
    */
-  private async extractAndLinkConcepts(memory: MemoryNode): Promise<void> {
+async function extractAndLinkConcepts(memory: MemoryNode): Promise<void> {
     // Extract key concepts using simple keyword extraction
     // In a real implementation, this could use NLP or LLM
-    const concepts = this.extractConcepts(memory.content)
+    const concepts = extractConcepts(memory.content)
     
     for (const concept of concepts) {
       const query = `
@@ -529,7 +570,7 @@ export class IngestionService {
   /**
    * Simple concept extraction (can be enhanced with NLP)
    */
-  private extractConcepts(content: string): string[] {
+function extractConcepts(content: string): string[] {
     // Extract technical concepts
     const techPatterns = [
       /\b(authentication|authorization|caching|database|api|frontend|backend)\b/gi,
@@ -549,7 +590,7 @@ export class IngestionService {
   /**
    * Ensure project node exists
    */
-  private async ensureProjectExists(projectName: string): Promise<void> {
+async function ensureProjectExists(projectName: string): Promise<void> {
     const query = `
       MERGE (p:Project {name: $projectName})
       ON CREATE SET p.id = randomUUID(),
@@ -565,7 +606,7 @@ export class IngestionService {
   /**
    * Create relationship between memory and project
    */
-  private async createProjectRelationship(memoryId: string, projectName: string): Promise<void> {
+async function createProjectRelationship(memoryId: string, projectName: string): Promise<void> {
     const query = `
       MATCH (m:Memory {id: $memoryId})
       MATCH (p:Project {name: $projectName})
@@ -582,7 +623,7 @@ export class IngestionService {
   /**
    * Create relationship between user and memory
    */
-  private async createUserRelationship(userId: string, memoryId: string): Promise<void> {
+async function createUserRelationship(userId: string, memoryId: string): Promise<void> {
     // First ensure user exists
     await executeQuery(`
       MERGE (u:User {id: $userId})
@@ -604,12 +645,12 @@ export class IngestionService {
   /**
    * Batch ingest memories
    */
-  async batchIngestMemories(memories: Array<Parameters<typeof this.ingestMemory>[0]>): Promise<void> {
+export async function batchIngestMemories(memories: Array<Parameters<typeof ingestMemory>[0]>): Promise<void> {
     log.info('Starting batch memory ingestion', { totalMemories: memories.length })
     
     for (const memory of memories) {
       try {
-        await this.ingestMemory(memory)
+        await ingestMemory(memory)
       } catch (error) {
         log.error('Failed to ingest memory in batch', error, {
           memoryIndex: memories.indexOf(memory),
@@ -620,6 +661,3 @@ export class IngestionService {
     
     log.info('Batch memory ingestion completed')
   }
-}
-
-export const ingestionService = new IngestionService()

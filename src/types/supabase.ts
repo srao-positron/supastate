@@ -53,6 +53,13 @@ export type Database = {
             foreignKeyName: "analysis_jobs_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -112,6 +119,13 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_keys_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_github_info"
             referencedColumns: ["id"]
           },
           {
@@ -182,6 +196,13 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branch_states_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_github_info"
             referencedColumns: ["id"]
           },
           {
@@ -286,10 +307,71 @@ export type Database = {
             foreignKeyName: "code_entities_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "code_entities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
+      }
+      code_files: {
+        Row: {
+          content: string
+          content_hash: string
+          created_at: string | null
+          git_metadata: Json | null
+          id: string
+          language: string
+          last_modified: string | null
+          last_processed_at: string | null
+          line_count: number
+          neo4j_file_id: string | null
+          path: string
+          project_name: string
+          size: number
+          updated_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          content: string
+          content_hash: string
+          created_at?: string | null
+          git_metadata?: Json | null
+          id?: string
+          language: string
+          last_modified?: string | null
+          last_processed_at?: string | null
+          line_count: number
+          neo4j_file_id?: string | null
+          path: string
+          project_name: string
+          size: number
+          updated_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          content?: string
+          content_hash?: string
+          created_at?: string | null
+          git_metadata?: Json | null
+          id?: string
+          language?: string
+          last_modified?: string | null
+          last_processed_at?: string | null
+          line_count?: number
+          neo4j_file_id?: string | null
+          path?: string
+          project_name?: string
+          size?: number
+          updated_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
       }
       code_graphs: {
         Row: {
@@ -318,6 +400,102 @@ export type Database = {
           id?: string
           repository?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      code_processing_queue: {
+        Row: {
+          content: string
+          created_at: string | null
+          error: string | null
+          file_path: string
+          git_metadata: Json | null
+          id: string
+          language: string
+          last_modified: string | null
+          processed_at: string | null
+          project_name: string
+          retry_count: number | null
+          status: string
+          task_id: string
+          updated_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          error?: string | null
+          file_path: string
+          git_metadata?: Json | null
+          id?: string
+          language: string
+          last_modified?: string | null
+          processed_at?: string | null
+          project_name: string
+          retry_count?: number | null
+          status?: string
+          task_id: string
+          updated_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          error?: string | null
+          file_path?: string
+          git_metadata?: Json | null
+          id?: string
+          language?: string
+          last_modified?: string | null
+          processed_at?: string | null
+          project_name?: string
+          retry_count?: number | null
+          status?: string
+          task_id?: string
+          updated_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      code_processing_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          failed_files: number
+          id: string
+          processed_files: number
+          project_name: string
+          started_at: string | null
+          status: string
+          total_files: number
+          updated_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          failed_files?: number
+          id?: string
+          processed_files?: number
+          project_name: string
+          started_at?: string | null
+          status?: string
+          total_files?: number
+          updated_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          failed_files?: number
+          id?: string
+          processed_files?: number
+          project_name?: string
+          started_at?: string | null
+          status?: string
+          total_files?: number
+          updated_at?: string | null
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -449,6 +627,13 @@ export type Database = {
             foreignKeyName: "code_relationships_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "code_relationships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -524,6 +709,13 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_github_info"
             referencedColumns: ["id"]
           },
           {
@@ -677,6 +869,13 @@ export type Database = {
             foreignKeyName: "memories_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -686,6 +885,7 @@ export type Database = {
         Row: {
           chunk_id: string
           content: string
+          content_hash: string | null
           created_at: string | null
           error: string | null
           id: string
@@ -700,6 +900,7 @@ export type Database = {
         Insert: {
           chunk_id: string
           content: string
+          content_hash?: string | null
           created_at?: string | null
           error?: string | null
           id?: string
@@ -714,6 +915,7 @@ export type Database = {
         Update: {
           chunk_id?: string
           content?: string
+          content_hash?: string | null
           created_at?: string | null
           error?: string | null
           id?: string
@@ -810,6 +1012,13 @@ export type Database = {
             foreignKeyName: "orchestration_jobs_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orchestration_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -821,6 +1030,105 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pattern_processing_checkpoints: {
+        Row: {
+          checkpoint_type: string
+          created_at: string | null
+          id: string
+          last_processed_at: string
+          metadata: Json | null
+          processed_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          checkpoint_type: string
+          created_at?: string | null
+          id?: string
+          last_processed_at?: string
+          metadata?: Json | null
+          processed_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          checkpoint_type?: string
+          created_at?: string | null
+          id?: string
+          last_processed_at?: string
+          metadata?: Json | null
+          processed_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pattern_processor_logs: {
+        Row: {
+          batch_id: string | null
+          created_at: string | null
+          details: Json | null
+          entity_count: number | null
+          error_stack: string | null
+          function_name: string | null
+          id: string
+          level: string
+          message: string
+          pattern_type: string | null
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          entity_count?: number | null
+          error_stack?: string | null
+          function_name?: string | null
+          id?: string
+          level: string
+          message: string
+          pattern_type?: string | null
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          entity_count?: number | null
+          error_stack?: string | null
+          function_name?: string | null
+          id?: string
+          level?: string
+          message?: string
+          pattern_type?: string | null
+        }
+        Relationships: []
+      }
+      processed_memories: {
+        Row: {
+          chunk_id: string
+          content_hash: string
+          id: string
+          neo4j_node_id: string | null
+          processed_at: string | null
+          project_name: string
+          workspace_id: string
+        }
+        Insert: {
+          chunk_id: string
+          content_hash: string
+          id?: string
+          neo4j_node_id?: string | null
+          processed_at?: string | null
+          project_name: string
+          workspace_id: string
+        }
+        Update: {
+          chunk_id?: string
+          content_hash?: string
+          id?: string
+          neo4j_node_id?: string | null
+          processed_at?: string | null
+          project_name?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       processing_status: {
         Row: {
@@ -1120,6 +1428,13 @@ export type Database = {
             foreignKeyName: "review_sessions_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1249,6 +1564,13 @@ export type Database = {
             foreignKeyName: "team_members_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1329,6 +1651,13 @@ export type Database = {
             foreignKeyName: "user_repositories_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_github_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_repositories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -1340,6 +1669,10 @@ export type Database = {
           created_at: string | null
           email: string
           full_name: string | null
+          github_access_token_encrypted: string | null
+          github_token_scopes: string[] | null
+          github_token_updated_at: string | null
+          github_username: string | null
           id: string
         }
         Insert: {
@@ -1347,6 +1680,10 @@ export type Database = {
           created_at?: string | null
           email: string
           full_name?: string | null
+          github_access_token_encrypted?: string | null
+          github_token_scopes?: string[] | null
+          github_token_updated_at?: string | null
+          github_username?: string | null
           id: string
         }
         Update: {
@@ -1354,13 +1691,104 @@ export type Database = {
           created_at?: string | null
           email?: string
           full_name?: string | null
+          github_access_token_encrypted?: string | null
+          github_token_scopes?: string[] | null
+          github_token_updated_at?: string | null
+          github_username?: string | null
           id?: string
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      active_cron_jobs: {
+        Row: {
+          active: boolean | null
+          job_type: string | null
+          jobid: number | null
+          jobname: string | null
+          schedule: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          job_type?: never
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          job_type?: never
+          jobid?: number | null
+          jobname?: string | null
+          schedule?: string | null
+        }
+        Relationships: []
+      }
+      queue_health: {
+        Row: {
+          oldest_msg_age_sec: number | null
+          queue_length: number | null
+          queue_name: string | null
+          scrape_time: string | null
+          total_messages: number | null
+        }
+        Relationships: []
+      }
+      recent_pattern_errors: {
+        Row: {
+          batch_id: string | null
+          created_at: string | null
+          details: Json | null
+          error_stack: string | null
+          function_name: string | null
+          id: string | null
+          message: string | null
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          error_stack?: string | null
+          function_name?: string | null
+          id?: string | null
+          message?: string | null
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          error_stack?: string | null
+          function_name?: string | null
+          id?: string | null
+          message?: string | null
+        }
+        Relationships: []
+      }
+      user_github_info: {
+        Row: {
+          github_token_scopes: string[] | null
+          github_token_updated_at: string | null
+          github_username: string | null
+          has_github_token: boolean | null
+          id: string | null
+        }
+        Insert: {
+          github_token_scopes?: string[] | null
+          github_token_updated_at?: string | null
+          github_username?: string | null
+          has_github_token?: never
+          id?: string | null
+        }
+        Update: {
+          github_token_scopes?: string[] | null
+          github_token_updated_at?: string | null
+          github_username?: string | null
+          has_github_token?: never
+          id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       api_user_id: {
@@ -1378,6 +1806,20 @@ export type Database = {
       cleanup_old_sync_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      get_cron_job: {
+        Args: { p_jobname: string }
+        Returns: {
+          jobid: number
+          schedule: string
+          command: string
+          active: boolean
+          jobname: string
+        }[]
+      }
+      get_github_token: {
+        Args: { user_id: string }
+        Returns: string
       }
       get_repository_diff: {
         Args: { p_repo_id: number; p_branch_name: string; p_team_id: string }
@@ -1493,6 +1935,20 @@ export type Database = {
         Args: { "": string } | { "": unknown } | { "": unknown }
         Returns: unknown
       }
+      list_cron_jobs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          jobid: number
+          schedule: string
+          command: string
+          nodename: string
+          nodeport: number
+          database: string
+          username: string
+          active: boolean
+          jobname: string
+        }[]
+      }
       match_memories: {
         Args: {
           query_embedding: string
@@ -1514,6 +1970,65 @@ export type Database = {
           updated_at: string
           similarity: number
         }[]
+      }
+      pgmq_archive: {
+        Args: { queue_name: string; msg_id: number }
+        Returns: boolean
+      }
+      pgmq_delete: {
+        Args: { queue_name: string; msg_id: number }
+        Returns: boolean
+      }
+      pgmq_metrics: {
+        Args: { p_queue_name: string }
+        Returns: {
+          queue_name: string
+          queue_length: number
+          newest_msg_age_sec: number
+          oldest_msg_age_sec: number
+          total_messages: number
+          scrape_time: string
+        }[]
+      }
+      pgmq_read: {
+        Args: { queue_name: string; vt?: number; qty?: number }
+        Returns: Json
+      }
+      pgmq_send: {
+        Args: { queue_name: string; msg: Json; delay?: number }
+        Returns: number
+      }
+      queue_code_ingestion_job: {
+        Args: {
+          p_code_entity_id: string
+          p_user_id: string
+          p_workspace_id?: string
+          p_metadata?: Json
+        }
+        Returns: number
+      }
+      queue_memory_ingestion_job: {
+        Args: {
+          p_memory_id: string
+          p_user_id: string
+          p_content: string
+          p_workspace_id?: string
+          p_metadata?: Json
+        }
+        Returns: number
+      }
+      queue_pattern_detection_job: {
+        Args: {
+          p_batch_id?: string
+          p_pattern_types?: string[]
+          p_limit?: number
+          p_workspace_id?: string
+        }
+        Returns: number
+      }
+      schedule_cron_job: {
+        Args: { p_jobname: string; p_schedule: string; p_command: string }
+        Returns: number
       }
       search_memories: {
         Args:
@@ -1607,9 +2122,22 @@ export type Database = {
         Args: { "": unknown[] }
         Returns: number
       }
+      store_github_token: {
+        Args: {
+          user_id: string
+          token: string
+          scopes?: string[]
+          username?: string
+        }
+        Returns: undefined
+      }
       sync_existing_users_to_teams: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      unschedule_cron_job: {
+        Args: { p_jobname: string }
+        Returns: boolean
       }
       vector_avg: {
         Args: { "": number[] }

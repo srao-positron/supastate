@@ -1,129 +1,98 @@
-import neo4j from 'neo4j-driver'
-import dotenv from 'dotenv'
+import { Neo4jService } from '../src/lib/neo4j/client.js';
+import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.local' })
-
-const NEO4J_URI = process.env.NEO4J_URI || 'neo4j+s://eb61aceb.databases.neo4j.io'
-const NEO4J_USER = process.env.NEO4J_USER || 'neo4j'
-const NEO4J_PASSWORD = process.env.NEO4J_PASSWORD!
+dotenv.config({ path: '.env.local' });
 
 async function checkNeo4jMemoryDates() {
-  const driver = neo4j.driver(
-    NEO4J_URI,
-    neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD)
-  )
-
-  const session = driver.session()
-
+  const neo4j = new Neo4jService();
+  
   try {
-    console.log('Checking memory dates in Neo4j...\n')
-
-    // Get sample of memories with their properties
-    const result = await session.run(`
+    console.log('Checking Memory nodes in Neo4j...\n');
+    
+    // Get a sample of Memory nodes
+    const result = await neo4j.query(`
       MATCH (m:Memory)
-      RETURN m, properties(m) as props
+      RETURN m.id as id, 
+             m.user_id as user_id,
+             m.workspace_id as workspace_id,
+             m.occurred_at as occurred_at,
+             m.created_at as created_at,
+             m.metadata as metadata,
+             m.startTime as startTime,
+             m.endTime as endTime
       ORDER BY m.created_at DESC
-      LIMIT 20
-    `)
-
-    console.log(`Found ${result.records.length} memories\n`)
-
-    const dateMap = new Map<string, number>()
-    const hourMap = new Map<number, number>()
-    const metadataTypes = new Map<string, number>()
-
-    result.records.forEach((record, idx) => {
-      const memory = record.get('m')
-      const props = record.get('props')
+      LIMIT 10
+    `);
+    
+    console.log(`Found ${result.length} Memory nodes\n`);
+    
+    result.forEach((record, index) => {
+      console.log(`\n--- Memory #${index + 1} ---`);
+      console.log(`ID: ${record.id}`);
+      console.log(`User ID: ${record.user_id}`);
+      console.log(`Workspace ID: ${record.workspace_id || 'NULL'}`);
+      console.log(`Occurred At: ${record.occurred_at || 'NULL'}`);
+      console.log(`Created At: ${record.created_at}`);
+      console.log(`StartTime property: ${record.startTime || 'NULL'}`);
+      console.log(`EndTime property: ${record.endTime || 'NULL'}`);
       
-      console.log(`Memory ${idx + 1}:`)
-      console.log(`  ID: ${props.id?.slice(0, 8) || 'N/A'}`)
-      console.log(`  Created At: ${props.created_at || 'NOT SET'}`)
-      console.log(`  Project: ${props.project_name || 'N/A'}`)
-      
-      // Check if metadata is set and what type
-      if (props.metadata) {
-        try {
-          const metadata = typeof props.metadata === 'string' 
-            ? JSON.parse(props.metadata) 
-            : props.metadata
-          const type = metadata.type || metadata.messageType || 'general'
-          metadataTypes.set(type, (metadataTypes.get(type) || 0) + 1)
-          console.log(`  Metadata type: ${type}`)
-          console.log(`  Metadata keys: ${Object.keys(metadata).join(', ')}`)
-        } catch (e) {
-          console.log(`  Metadata: PARSE ERROR`)
-        }
-      } else {
-        console.log(`  Metadata: NOT SET`)
-      }
-
-      if (props.created_at) {
-        const date = new Date(props.created_at)
-        const dateStr = date.toISOString().split('T')[0]
-        const hour = date.getHours()
+      if (record.metadata) {
+        console.log(`\nMetadata:`);
+        const metadata = typeof record.metadata === 'string' 
+          ? JSON.parse(record.metadata) 
+          : record.metadata;
+        console.log(JSON.stringify(metadata, null, 2));
         
-        dateMap.set(dateStr, (dateMap.get(dateStr) || 0) + 1)
-        hourMap.set(hour, (hourMap.get(hour) || 0) + 1)
+        // Check metadata fields
+        console.log(`\nMetadata Analysis:`);
+        console.log(`- Has metadata.startTime: ${metadata.startTime ? 'YES' : 'NO'}`);
+        console.log(`- Metadata startTime: ${metadata.startTime || 'N/A'}`);
+        console.log(`- Has metadata.endTime: ${metadata.endTime ? 'YES' : 'NO'}`);
+        console.log(`- Metadata endTime: ${metadata.endTime || 'N/A'}`);
+      } else {
+        console.log(`\nNo metadata found`);
       }
-      
-      console.log()
-    })
-
-    console.log('\nDate distribution:')
-    if (dateMap.size === 0) {
-      console.log('  NO DATES FOUND - created_at is not being set!')
-    } else {
-      for (const [date, count] of dateMap) {
-        console.log(`  ${date}: ${count} memories`)
-      }
-    }
-
-    console.log('\nHour distribution:')
-    if (hourMap.size === 0) {
-      console.log('  NO HOURS FOUND')
-    } else {
-      for (const [hour, count] of hourMap) {
-        console.log(`  ${hour}:00: ${count} memories`)
-      }
-    }
-
-    console.log('\nMemory types:')
-    for (const [type, count] of metadataTypes) {
-      console.log(`  ${type}: ${count} memories`)
-    }
-
-    // Check date range
-    const dateRangeResult = await session.run(`
+    });
+    
+    // Summary statistics
+    console.log(`\n\n=== NEO4J SUMMARY ===`);
+    const summaryResult = await neo4j.query(`
       MATCH (m:Memory)
-      WHERE m.created_at IS NOT NULL
-      RETURN MIN(m.created_at) as earliest, MAX(m.created_at) as latest, COUNT(m) as count
-    `)
-
-    const dateRange = dateRangeResult.records[0]
-    console.log('\nDate range in Neo4j:')
-    console.log(`  Earliest: ${dateRange.get('earliest') || 'N/A'}`)
-    console.log(`  Latest: ${dateRange.get('latest') || 'N/A'}`)
-    console.log(`  Count with dates: ${dateRange.get('count')}`)
-
-    // Check how many memories have no created_at
-    const noDateResult = await session.run(`
+      WITH m
+      LIMIT 1000
+      RETURN 
+        count(m) as total,
+        count(m.occurred_at) as with_occurred_at,
+        count(m.startTime) as with_startTime,
+        count(m.endTime) as with_endTime
+    `);
+    
+    if (summaryResult[0]) {
+      const summary = summaryResult[0];
+      console.log(`Total Memory nodes (sample of 1000): ${summary.total}`);
+      console.log(`Nodes with occurred_at: ${summary.with_occurred_at}`);
+      console.log(`Nodes with startTime property: ${summary.with_startTime}`);
+      console.log(`Nodes with endTime property: ${summary.with_endTime}`);
+    }
+    
+    // Check all properties of a Memory node
+    console.log(`\n\n=== ALL PROPERTIES OF A MEMORY NODE ===`);
+    const propsResult = await neo4j.query(`
       MATCH (m:Memory)
-      WHERE m.created_at IS NULL
-      RETURN COUNT(m) as count
-    `)
-    console.log(`  Count without dates: ${noDateResult.records[0].get('count')}`)
-
+      WITH m LIMIT 1
+      RETURN keys(m) as properties
+    `);
+    
+    if (propsResult[0]) {
+      console.log(`Properties: ${propsResult[0].properties.join(', ')}`);
+    }
+    
+  } catch (error) {
+    console.error('Error:', error);
   } finally {
-    await session.close()
-    await driver.close()
+    await neo4j.disconnect();
   }
 }
 
-checkNeo4jMemoryDates().then(() => {
-  console.log('\nDone!')
-  process.exit(0)
-}).catch(err => {
-  console.error('Error:', err)
-  process.exit(1)
-})
+checkNeo4jMemoryDates().catch(console.error);
+EOF < /dev/null

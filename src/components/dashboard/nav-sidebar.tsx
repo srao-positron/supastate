@@ -13,6 +13,9 @@ import {
   GitBranch,
   MessageSquare,
   Brain,
+  Search,
+  Code2,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -30,13 +33,23 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     href: "/memories",
-    label: "Memory Explorer",
+    label: "Dashboard",
     icon: Brain,
   },
   {
-    href: "/graph",
-    label: "Code Graph",
-    icon: GitBranch,
+    href: "/search",
+    label: "Unified Search",
+    icon: Sparkles,
+  },
+  {
+    href: "/memory-search",
+    label: "Memory Search",
+    icon: Search,
+  },
+  {
+    href: "/code-search",
+    label: "Code Search",
+    icon: Code2,
   },
   {
     href: "/reviews",

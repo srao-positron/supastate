@@ -15,8 +15,42 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 async function inspectNeo4j() {
   console.log('Inspecting Neo4j data...\n');
   
-  // Query for all code entities
+  // Query for Memory and EntitySummary nodes
   const queries = [
+    {
+      name: 'Memory nodes count and workspace_id',
+      query: `
+        MATCH (m:Memory)
+        RETURN COUNT(m) as count, m.workspace_id
+        LIMIT 10
+      `
+    },
+    {
+      name: 'Memory nodes with embeddings',
+      query: `
+        MATCH (m:Memory)
+        WHERE m.embedding IS NOT NULL
+        RETURN COUNT(m) as count
+      `
+    },
+    {
+      name: 'EntitySummary nodes',
+      query: `
+        MATCH (e:EntitySummary)
+        RETURN COUNT(e) as count, e.type
+        LIMIT 10
+      `
+    },
+    {
+      name: 'Recent Memory nodes details',
+      query: `
+        MATCH (m:Memory)
+        RETURN m.id, m.content, m.workspace_id, m.user_id, m.created_at, 
+               CASE WHEN m.embedding IS NOT NULL THEN true ELSE false END as has_embedding
+        ORDER BY m.created_at DESC
+        LIMIT 10
+      `
+    },
     {
       name: 'All CodeEntity nodes',
       query: `
@@ -24,32 +58,6 @@ async function inspectNeo4j() {
         RETURN n.name as name, n.type as type, n.project_name as project, labels(n) as labels
         ORDER BY n.created_at DESC
         LIMIT 20
-      `
-    },
-    {
-      name: 'All relationships',
-      query: `
-        MATCH (n:CodeEntity)-[r]->(m)
-        RETURN n.name as from, type(r) as relationship, m.name as to, n.project_name as project
-        ORDER BY n.created_at DESC
-        LIMIT 20
-      `
-    },
-    {
-      name: 'Unresolved references',
-      query: `
-        MATCH (n:CodeEntity)-[r:UNRESOLVED_REFERENCE]->(u:UnresolvedReference)
-        RETURN n.name as from, r.targetName as targetName, r.type as intendedType
-        LIMIT 20
-      `
-    },
-    {
-      name: 'CodeFile nodes',
-      query: `
-        MATCH (f:CodeFile)
-        RETURN f.path as path, f.project_name as project, f.language as language
-        ORDER BY f.updated_at DESC
-        LIMIT 10
       `
     }
   ];

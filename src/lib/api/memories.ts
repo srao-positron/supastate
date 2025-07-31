@@ -209,37 +209,83 @@ export class MemoriesAPI {
 
   async getRelatedMemories(id: string, limit = 5): Promise<Memory[]> {
     try {
-      const { teamId, userId } = await this.getWorkspaceInfo()
-      if (!teamId && !userId) return []
+      const { data: { session } } = await this.supabase.auth.getSession()
+      if (!session) return []
 
-      // First get the memory to find its project
-      const memory = await this.getMemory(id)
-      if (!memory) return []
+      const response = await fetch(`/api/memories/${id}/related`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
 
-      // Get other memories from the same project
-      let query = this.supabase
-        .from('memories')
-        .select('*')
-        .eq('project_name', memory.project_name)
-        .neq('id', id)
-        .limit(limit)
-        .order('created_at', { ascending: false })
+      if (!response.ok) {
+        throw new Error('Failed to get related memories')
+      }
+
+      const { related } = await response.json()
       
-      // Filter by workspace
-      // If user is part of a team, show both team memories AND their personal memories
-      if (teamId) {
-        query = query.or(`team_id.eq.${teamId},user_id.eq.${userId}`)
-      } else {
-        query = query.eq('user_id', userId)
+      // Combine all related memories and convert to Memory format
+      const allRelated: Memory[] = []
+      
+      // Add temporal relationships (preceded by, followed by, etc.)
+      if (related.temporal) {
+        related.temporal.forEach((item: any) => {
+          allRelated.push(this.formatMemory(item))
+        })
       }
       
-      const { data, error } = await query
-
-      if (error) throw error
-      return data || []
+      // Add conceptually related (same concepts discussed)
+      if (related.conceptual) {
+        related.conceptual.forEach((item: any) => {
+          allRelated.push(this.formatMemory(item))
+        })
+      }
+      
+      // Add semantically similar
+      if (related.semantic) {
+        related.semantic.forEach((item: any) => {
+          allRelated.push(this.formatMemory(item))
+        })
+      }
+      
+      // Add context (before/after from same session)
+      if (related.context) {
+        // Add a few before and after for context
+        const contextItems = [
+          ...(related.context.before || []).slice(0, 2),
+          ...(related.context.after || []).slice(0, 2)
+        ]
+        contextItems.forEach((item: any) => {
+          allRelated.push(this.formatMemory(item))
+        })
+      }
+      
+      // Remove duplicates and limit
+      const uniqueRelated = Array.from(
+        new Map(allRelated.map(m => [m.id, m])).values()
+      ).slice(0, limit)
+      
+      return uniqueRelated
     } catch (error) {
       console.error('Get related memories error:', error)
       return []
+    }
+  }
+
+  private formatMemory(item: any): Memory {
+    return {
+      id: item.id,
+      team_id: item.team_id || item.workspace_id || 'default-team',
+      user_id: item.user_id || null,
+      project_name: item.project_name || 'Unknown Project',
+      chunk_id: item.chunk_id || item.id,
+      content: item.content || '',
+      metadata: typeof item.metadata === 'string' ? JSON.parse(item.metadata) : (item.metadata || {}),
+      created_at: item.created_at || new Date().toISOString(),
+      occurred_at: item.occurred_at,
+      updated_at: item.updated_at || item.created_at || new Date().toISOString(),
+      similarity: item.similarity
     }
   }
 

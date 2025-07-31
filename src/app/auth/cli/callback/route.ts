@@ -31,6 +31,24 @@ export async function GET(request: Request) {
     
     console.log('[CLI Auth Debug] Successfully exchanged code for session')
     
+    // Store GitHub token if available
+    const providerToken = authData.session.provider_token
+    if (providerToken) {
+      console.log('[CLI Auth Debug] Storing GitHub token for user')
+      const { error: storeError } = await supabase.rpc('store_github_token', {
+        user_id: authData.session.user.id,
+        token: providerToken,
+        scopes: ['read:user', 'user:email', 'repo'], // These were requested in the OAuth flow
+        username: authData.session.user.user_metadata?.user_name || null
+      })
+      
+      if (storeError) {
+        console.error('[CLI Auth Debug] Failed to store GitHub token:', storeError)
+      } else {
+        console.log('[CLI Auth Debug] GitHub token stored successfully')
+      }
+    }
+    
     // Get user info
     console.log('[CLI Auth Debug] Getting user info...')
     const { data: { user }, error: userError } = await supabase.auth.getUser()

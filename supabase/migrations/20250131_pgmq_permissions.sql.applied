@@ -1,0 +1,24 @@
+-- Grant necessary permissions for pgmq to authenticated and service_role users
+GRANT USAGE ON SCHEMA pgmq TO authenticated, service_role, anon;
+
+-- Grant execute permissions on pgmq functions
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgmq TO service_role;
+
+-- Grant select on pgmq tables for monitoring
+GRANT SELECT ON ALL TABLES IN SCHEMA pgmq TO service_role;
+
+-- Ensure the queue functions we created have proper permissions (if they exist)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'queue_pattern_detection_job') THEN
+        GRANT EXECUTE ON FUNCTION public.queue_pattern_detection_job TO authenticated, service_role;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'queue_memory_ingestion_job') THEN
+        GRANT EXECUTE ON FUNCTION public.queue_memory_ingestion_job TO authenticated, service_role;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'queue_code_ingestion_job') THEN
+        GRANT EXECUTE ON FUNCTION public.queue_code_ingestion_job TO authenticated, service_role;
+    END IF;
+END $$;

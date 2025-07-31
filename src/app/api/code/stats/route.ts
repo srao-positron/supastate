@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import Neo4j from 'neo4j-driver'
+import { getOwnershipFilter, getOwnershipParams } from '@/lib/neo4j/query-patterns'
 
 const neo4jUri = process.env.NEO4J_URI || 'neo4j+s://eb61aceb.databases.neo4j.io'
 const neo4jUser = process.env.NEO4J_USER || 'neo4j'
@@ -30,43 +31,33 @@ export async function GET(request: NextRequest) {
     const workspaceId = teamId ? `team:${teamId}` : `user:${userId}`
     const userWorkspaceId = `user:${userId}`
 
-    // Build WHERE clause based on whether user has a team
-    let whereClause = teamId 
-      ? `(e.workspace_id = $workspaceId 
-         OR e.workspace_id = $userWorkspaceId
-         OR e.user_id = $userId 
-         OR e.team_id = $teamId)`
-      : `(e.workspace_id = $workspaceId 
-         OR e.workspace_id = $userWorkspaceId
-         OR e.user_id = $userId)`
+    // Use standard ownership filter
+    const ownershipFilter = getOwnershipFilter({ 
+      userId, 
+      workspaceId: teamId ? workspaceId : undefined,
+      teamId,
+      nodeAlias: 'e' 
+    })
+    const params = getOwnershipParams({ userId, workspaceId: teamId ? workspaceId : undefined, teamId })
 
-    // Build parameters object
-    const params: any = { workspaceId, userWorkspaceId, userId }
-    if (teamId) {
-      params.teamId = teamId
-    }
-
-    // Get code entity stats
+    // Get code entity stats - fixed to count files correctly
     const result = await session.run(`
       MATCH (e:CodeEntity)
-      WHERE ${whereClause}
-      OPTIONAL MATCH (e)-[:DEFINED_IN]->(f:CodeFile)
-      WITH e, f
+      WHERE ${ownershipFilter}
+      WITH e
       RETURN 
         COUNT(DISTINCT e) as totalEntities,
-        COUNT(DISTINCT f.path) as totalFiles,
+        COUNT(DISTINCT e.path) as totalFiles,
         COUNT(DISTINCT e.project_name) as totalProjects,
-        COLLECT(DISTINCT e.type) as entityTypes,
-        null as linkedEntities
-      UNION
-      MATCH (e:CodeEntity)<-[:REFERENCES_CODE]-(m:Memory)
-      WHERE ${whereClause}
-      RETURN 
-        null as totalEntities,
-        null as totalFiles,
-        null as totalProjects,
-        null as entityTypes,
-        COUNT(DISTINCT e) as linkedEntities
+        COLLECT(DISTINCT e.type) as entityTypes
+    `, params)
+
+    // Get linked entities count separately
+    const linkedResult = await session.run(`
+      MATCH (e:CodeEntity)
+      WHERE ${ownershipFilter}
+        AND EXISTS((e)<-[:REFERENCES_CODE|DISCUSSES]-(:Memory))
+      RETURN COUNT(DISTINCT e) as linkedEntities
     `, params)
 
     const stats = {
@@ -77,40 +68,47 @@ export async function GET(request: NextRequest) {
       entityTypes: {} as Record<string, number>
     }
 
-    for (const record of result.records) {
-      if (record.get('totalEntities') !== null) {
-        stats.totalEntities = record.get('totalEntities').toNumber ? record.get('totalEntities').toNumber() : record.get('totalEntities')
-        stats.totalFiles = record.get('totalFiles').toNumber ? record.get('totalFiles').toNumber() : record.get('totalFiles')
-        stats.totalProjects = record.get('totalProjects').toNumber ? record.get('totalProjects').toNumber() : record.get('totalProjects')
-        
-        const types = record.get('entityTypes') || []
-        for (const type of types) {
-          stats.entityTypes[type] = (stats.entityTypes[type] || 0) + 1
-        }
-      }
-      if (record.get('linkedEntities') !== null) {
-        stats.linkedEntities = record.get('linkedEntities').toNumber ? record.get('linkedEntities').toNumber() : record.get('linkedEntities')
+    // Process main stats
+    if (result.records.length > 0) {
+      const record = result.records[0]
+      stats.totalEntities = record.get('totalEntities').toNumber ? record.get('totalEntities').toNumber() : record.get('totalEntities')
+      stats.totalFiles = record.get('totalFiles').toNumber ? record.get('totalFiles').toNumber() : record.get('totalFiles')
+      stats.totalProjects = record.get('totalProjects').toNumber ? record.get('totalProjects').toNumber() : record.get('totalProjects')
+      
+      const types = record.get('entityTypes') || []
+      for (const type of types) {
+        stats.entityTypes[type] = (stats.entityTypes[type] || 0) + 1
       }
     }
 
-    // Get entity type distribution
-    const typeResult = await session.run(`
+    // Process linked entities
+    if (linkedResult.records.length > 0) {
+      stats.linkedEntities = linkedResult.records[0].get('linkedEntities').toNumber ? 
+        linkedResult.records[0].get('linkedEntities').toNumber() : 
+        linkedResult.records[0].get('linkedEntities')
+    }
+
+    // Get language distribution instead of entity types
+    const langResult = await session.run(`
       MATCH (e:CodeEntity)
-      WHERE ${whereClause}
-      RETURN e.type as type, COUNT(e) as count
+      WHERE ${ownershipFilter}
+      RETURN e.language as language, COUNT(e) as count
       ORDER BY count DESC
     `, params)
 
-    stats.entityTypes = {}
-    for (const record of typeResult.records) {
-      const type = record.get('type')
+    const languageDistribution: Record<string, number> = {}
+    for (const record of langResult.records) {
+      const language = record.get('language') || 'unknown'
       const count = record.get('count')
-      if (type) {
-        stats.entityTypes[type] = count.toNumber ? count.toNumber() : count
-      }
+      languageDistribution[language] = count.toNumber ? count.toNumber() : count
     }
 
-    return NextResponse.json({ stats })
+    return NextResponse.json({ 
+      stats: {
+        ...stats,
+        languageDistribution
+      }
+    })
   } catch (error) {
     console.error('Failed to get code stats:', error)
     return NextResponse.json({ 

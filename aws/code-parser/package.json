@@ -1,0 +1,25 @@
+{
+  "name": "code-parser-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for parsing code and extracting language-specific attributes",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "cdk": "cdk",
+    "deploy": "npm run build && cdk deploy --require-approval never"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-lambda": "^3.855.0",
+    "@types/node": "^20.19.9",
+    "aws-cdk": "^2.150.0",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/types": "^7.24.0",
+    "@types/babel__traverse": "^7.20.0"
+  }
+}

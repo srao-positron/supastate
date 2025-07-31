@@ -1,0 +1,36 @@
+{
+  "version": "45.0.0",
+  "files": {
+    "fd66cfb8171895ebe897e2d024b389b183f97cc81eb2d71c5f5ede3c90677ed8": {
+      "displayName": "CodeParserFunction/Code",
+      "source": {
+        "path": "asset.fd66cfb8171895ebe897e2d024b389b183f97cc81eb2d71c5f5ede3c90677ed8",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "current_account-us-east-1-71d03357": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1",
+          "objectKey": "fd66cfb8171895ebe897e2d024b389b183f97cc81eb2d71c5f5ede3c90677ed8.zip",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-us-east-1"
+        }
+      }
+    },
+    "1c253352c97aade5f5472c69ee00c7063069dc22a5e528e055b4ddd638ebadff": {
+      "displayName": "SupastateCodeParserStack Template",
+      "source": {
+        "path": "SupastateCodeParserStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "current_account-us-east-1-eb9c31ef": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1",
+          "objectKey": "1c253352c97aade5f5472c69ee00c7063069dc22a5e528e055b4ddd638ebadff.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

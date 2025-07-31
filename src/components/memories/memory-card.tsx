@@ -77,7 +77,9 @@ export function MemoryCard({
                 <span>
                   {memory.metadata?.startTime 
                     ? new Date(memory.metadata.startTime).toLocaleDateString() 
-                    : new Date(memory.created_at).toLocaleDateString()}
+                    : memory.created_at 
+                      ? new Date(memory.created_at).toLocaleDateString()
+                      : 'Unknown date'}
                 </span>
               </div>
             </div>

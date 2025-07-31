@@ -6,6 +6,7 @@
     "https://esm.sh/source-map@^0.6.0?target=denonext": "https://esm.sh/source-map@0.6.1?target=denonext"
   },
   "remote": {
+    "https://cdn.jsdelivr.net/npm/web-tree-sitter@0.20.8/tree-sitter.js": "0d94b84976dc199f7cdfecf2ed4489758bf62dc4633169081fa500932a56c244",
     "https://esm.sh/buffer-from@1.1.2/denonext/buffer-from.mjs": "dafdfaf9205bdc33bcde4f4a22014fa78b325c07e25d3f0316c8a609076ec2ad",
     "https://esm.sh/buffer-from@1.1.2?target=denonext": "0333d3eb82fde733d4b26ae6558a3b7fca98fd7192fc2ffb1c0714522199e02e",
     "https://esm.sh/source-map-support@0.5.21/denonext/source-map-support.mjs": "07b16eadac43d9ab36c92c0860425b2e07844575fe7c3a19fa0e5c5118d38951",
@@ -19,6 +20,7 @@
     "packageJson": {
       "dependencies": [
         "npm:@modelcontextprotocol/sdk@^1.16.0",
+        "npm:@monaco-editor/react@^4.7.0",
         "npm:@octokit/app@^14.0.2",
         "npm:@octokit/rest@^20.0.2",
         "npm:@octokit/webhooks-types@^7.3.2",
@@ -63,6 +65,7 @@
         "npm:jest-environment-jsdom@^29.7.0",
         "npm:jest@^29.7.0",
         "npm:lucide-react@0.396",
+        "npm:monaco-editor@~0.52.2",
         "npm:neo4j-driver@^5.28.1",
         "npm:next@14.2.5",
         "npm:openai@^5.10.2",

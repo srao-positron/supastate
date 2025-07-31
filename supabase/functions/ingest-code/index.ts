@@ -23,6 +23,12 @@ interface CodeIngestionRequest {
   fullSync?: boolean
 }
 
+function getEntityType(language: string): string {
+  // Always return 'module' to match existing data in the database
+  // The unique constraint includes entity_type, so we need consistency
+  return 'module'
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -133,118 +139,223 @@ serve(async (req, connInfo) => {
     }
 
     // Process files and add to queue
-    const queueItems = []
-    const fileUpdates = []
+    let queuedCount = 0
     
     for (const file of body.files) {
+      // Log the incoming file data
+      console.log(`[Ingest Code] Received file: path="${file.path}", language="${file.language}"`)
+      
       // Calculate content hash
       const contentHash = await createHash('sha256').update(file.content).digest('hex')
       
-      // Check if file has changed
-      const { data: existingFile } = await supabase
-        .from('code_files')
-        .select('id, content_hash')
-        .eq('workspace_id', workspaceId)
+      // Check if file has changed in code_entities table - match ALL constraint fields
+      console.log(`[Ingest Code] Checking for existing file: project=${body.projectName}, path=${file.path}, name=${file.path.split('/').pop()}, entity_type=${getEntityType(file.language)}`)
+      
+      const { data: existingFile, error: checkError } = await supabase
+        .from('code_entities')
+        .select('id, metadata')
+        .is('team_id', null)  // Use .is() for null comparison
+        .eq('user_id', user.id)
         .eq('project_name', body.projectName)
-        .eq('path', file.path)
-        .single()
+        .eq('file_path', file.path)
+        .eq('name', file.path.split('/').pop() || file.path)
+        .eq('entity_type', getEntityType(file.language))
+        .maybeSingle()  // Use maybeSingle instead of single
+        
+      if (checkError) {
+        console.error(`[Ingest Code] Error checking for existing file:`, checkError)
+      }
+      
+      if (!existingFile) {
+        console.log(`[Ingest Code] No existing file found for: ${file.path}`)
+      } else {
+        console.log(`[Ingest Code] Found existing file with ID: ${existingFile.id}`)
+      }
 
       // Skip if content hasn't changed (unless full sync requested)
-      if (!body.fullSync && existingFile && existingFile.content_hash === contentHash) {
+      if (!body.fullSync && existingFile && existingFile.metadata?.contentHash === contentHash) {
         console.log(`[Ingest Code] Skipping unchanged file: ${file.path}`)
         continue
       }
 
-      // Add to processing queue
-      queueItems.push({
-        task_id: taskId,
-        file_path: file.path,
-        content: file.content,
-        language: file.language,
-        workspace_id: workspaceId,
-        project_name: body.projectName,
-        git_metadata: file.gitMetadata || null,
-        status: 'pending'
+      // Replace upsert with explicit SELECT/INSERT/UPDATE logic
+      console.log(`[Ingest Code] Processing file: ${file.path}`)
+      
+      let finalEntityId: string
+      
+      if (existingFile) {
+        console.log(`[Ingest Code] Found existing file with ID: ${existingFile.id}`)
+        
+        // UPDATE existing entity
+        const { data: updatedEntity, error: updateError } = await supabase
+          .from('code_entities')
+          .update({
+            language: file.language,
+            source_code: file.content,
+            metadata: {
+              contentHash,
+              size: new TextEncoder().encode(file.content).length,
+              lineCount: file.content.split('\n').length,
+              gitMetadata: file.gitMetadata || null,
+              workspaceId: workspaceId // Store workspace ID in metadata
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingFile.id)
+          .select('id')
+          .single()
+          
+        if (updateError) {
+          console.error(`[Ingest Code] Failed to update entity ${existingFile.id}:`, updateError)
+          continue
+        }
+        
+        if (updatedEntity && updatedEntity.id) {
+          finalEntityId = updatedEntity.id
+          console.log(`[Ingest Code] Successfully updated entity: ${finalEntityId} (returned from DB)`)
+        } else {
+          console.error(`[Ingest Code] Update succeeded but no data returned! Using existing ID: ${existingFile.id}`)
+          finalEntityId = existingFile.id
+        }
+        
+      } else {
+        // INSERT new entity
+        const newEntityId = crypto.randomUUID()
+        console.log(`[Ingest Code] Creating new entity with ID: ${newEntityId}`)
+        
+        const insertPayload = {
+          id: newEntityId,
+          team_id: null,
+          file_path: file.path,
+          name: file.path.split('/').pop() || file.path,
+          entity_type: getEntityType(file.language),
+          language: file.language,
+          source_code: file.content,
+          user_id: user.id,
+          project_name: body.projectName,
+          metadata: {
+            contentHash,
+            size: new TextEncoder().encode(file.content).length,
+            lineCount: file.content.split('\n').length,
+            gitMetadata: file.gitMetadata || null,
+            workspaceId: workspaceId // Store workspace ID in metadata
+          }
+        }
+        
+        console.log(`[Ingest Code] Inserting with payload:`, JSON.stringify({
+          id: insertPayload.id,
+          team_id: insertPayload.team_id,
+          file_path: insertPayload.file_path,
+          name: insertPayload.name,
+          entity_type: insertPayload.entity_type,
+          user_id: insertPayload.user_id,
+          project_name: insertPayload.project_name
+        }))
+        
+        const { data: insertedEntity, error: insertError } = await supabase
+          .from('code_entities')
+          .insert(insertPayload)
+          .select('id')
+          .single()
+          
+        if (insertError) {
+          console.error(`[Ingest Code] Failed to insert entity:`, insertError)
+          console.error(`[Ingest Code] Insert attempted with: team_id=null, user_id=${user.id}, project=${body.projectName}, path=${file.path}, name=${file.path.split('/').pop()}, entity_type=${getEntityType(file.language)}`)
+          
+          // If insert failed due to duplicate key, try to fetch the existing entity
+          if (insertError.code === '23505') {
+            console.log(`[Ingest Code] Insert failed due to duplicate key, fetching existing entity...`)
+            const { data: fetchedEntity } = await supabase
+              .from('code_entities')
+              .select('id')
+              .is('team_id', null)  // Use .is() for null comparison
+              .eq('user_id', user.id)
+              .eq('project_name', body.projectName)
+              .eq('file_path', file.path)
+              .eq('name', file.path.split('/').pop() || file.path)
+              .eq('entity_type', getEntityType(file.language))
+              .maybeSingle()
+              
+            if (fetchedEntity) {
+              console.log(`[Ingest Code] Found existing entity on retry: ${fetchedEntity.id}`)
+              finalEntityId = fetchedEntity.id
+              // Continue with this ID instead of skipping
+            } else {
+              console.error(`[Ingest Code] Could not find entity even after duplicate key error!`)
+              continue
+            }
+          } else {
+            continue
+          }
+        } else if (insertedEntity && insertedEntity.id) {
+          finalEntityId = insertedEntity.id
+          console.log(`[Ingest Code] Successfully inserted entity: ${finalEntityId} (returned from DB)`)
+        } else {
+          console.error(`[Ingest Code] Insert succeeded but no data returned! Using generated ID: ${newEntityId}`)
+          finalEntityId = newEntityId
+        }
+      }
+      
+      // Double-check the entity exists before queueing
+      console.log(`[Ingest Code] Verifying entity exists: ${finalEntityId}`)
+      const { data: verifyEntity, error: verifyError } = await supabase
+        .from('code_entities')
+        .select('id')
+        .eq('id', finalEntityId)
+        .single()
+        
+      if (verifyError || !verifyEntity) {
+        console.error(`[Ingest Code] CRITICAL: Entity ${finalEntityId} not found after insert/update!`)
+        continue
+      }
+      
+      console.log(`[Ingest Code] Verified entity exists: ${finalEntityId}`)
+      
+      // Add to pgmq queue
+      console.log(`[Ingest Code] Queueing entity ${finalEntityId} for Neo4j ingestion`)
+      const { error: queueError } = await supabase.rpc('pgmq_send', {
+        queue_name: 'code_ingestion',
+        msg: {
+          code_entity_id: finalEntityId,
+          user_id: user.id,
+          workspace_id: workspaceId,
+          content: file.content,
+          metadata: {
+            path: file.path,
+            language: file.language,
+            project_name: body.projectName,
+            git_metadata: file.gitMetadata || null
+          }
+        }
       })
-
-      // Prepare file record update
-      fileUpdates.push({
-        path: file.path,
-        project_name: body.projectName,
-        workspace_id: workspaceId,
-        language: file.language,
-        content: file.content,
-        content_hash: contentHash,
-        size: new TextEncoder().encode(file.content).length,
-        line_count: file.content.split('\n').length,
-        git_metadata: file.gitMetadata || null
-      })
-    }
-
-    // Insert into processing queue
-    if (queueItems.length > 0) {
-      const { error: queueError } = await supabase
-        .from('code_processing_queue')
-        .insert(queueItems)
 
       if (queueError) {
-        console.error('[Ingest Code] Failed to queue files:', queueError)
-        return new Response(
-          JSON.stringify({ error: 'Failed to queue files for processing' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-        )
+        console.error('[Ingest Code] Failed to queue file:', queueError)
+        continue
       }
 
-      // Upsert file records
-      const { error: fileError } = await supabase
-        .from('code_files')
-        .upsert(fileUpdates, {
-          onConflict: 'workspace_id,project_name,path'
-        })
-
-      if (fileError) {
-        console.error('[Ingest Code] Failed to update file records:', fileError)
-      }
+      queuedCount++
     }
 
     // Update task with actual file count
     await supabase
       .from('code_processing_tasks')
       .update({ 
-        total_files: queueItems.length,
-        status: queueItems.length > 0 ? 'pending' : 'completed',
+        total_files: queuedCount,
+        status: queuedCount > 0 ? 'queued' : 'completed',
         started_at: new Date().toISOString()
       })
       .eq('id', taskId)
-
-    // Trigger processing if there are files to process
-    if (queueItems.length > 0) {
-      const runtime = connInfo as any
-      if (runtime?.waitUntil) {
-        // Trigger the processing edge function
-        const processUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-code`
-        const processResponse = fetch(processUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ taskId })
-        })
-
-        runtime.waitUntil(processResponse)
-      }
-    }
 
     // Return response
     return new Response(
       JSON.stringify({
         success: true,
         taskId,
-        filesQueued: queueItems.length,
-        filesSkipped: body.files.length - queueItems.length,
-        message: queueItems.length > 0 
-          ? `Processing ${queueItems.length} files in background`
+        filesQueued: queuedCount,
+        filesSkipped: body.files.length - queuedCount,
+        message: queuedCount > 0 
+          ? `Queued ${queuedCount} files for processing`
           : 'No files needed processing'
       }),
       { 
