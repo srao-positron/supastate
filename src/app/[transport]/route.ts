@@ -5,44 +5,6 @@ import { createServiceClient } from '@/lib/supabase/service'
 import neo4j from 'neo4j-driver'
 import { getOwnershipFilter } from '@/lib/neo4j/query-patterns'
 
-// Tool schemas
-const SearchSchema = z.object({
-  query: z.string().describe('Natural language search query'),
-  types: z.array(z.enum(['code', 'memory', 'github'])).optional().describe('Filter by entity types'),
-  limit: z.number().optional().default(20).describe('Maximum results'),
-  workspace: z.string().optional().describe('Specific workspace filter'),
-})
-
-const SearchCodeSchema = z.object({
-  query: z.string().describe('Code pattern or natural language'),
-  language: z.string().optional().describe('Filter by programming language'),
-  project: z.string().optional().describe('Filter by project name'),
-  includeTests: z.boolean().optional().default(false),
-  includeImports: z.boolean().optional().default(true),
-})
-
-const SearchMemoriesSchema = z.object({
-  query: z.string().describe('Natural language query'),
-  dateRange: z.object({
-    start: z.string().optional(),
-    end: z.string().optional(),
-  }).optional(),
-  projects: z.array(z.string()).optional(),
-})
-
-const ExploreRelationshipsSchema = z.object({
-  entityUri: z.string().describe('Starting entity URI'),
-  relationshipTypes: z.array(z.string()).optional(),
-  depth: z.number().optional().default(2).max(3),
-  direction: z.enum(['in', 'out', 'both']).optional().default('both'),
-})
-
-const InspectEntitySchema = z.object({
-  uri: z.string().describe('Entity URI to inspect'),
-  includeRelationships: z.boolean().optional().default(true),
-  includeContent: z.boolean().optional().default(true),
-  includeSimilar: z.boolean().optional().default(false),
-})
 
 async function getEmbedding(text: string): Promise<number[]> {
   const supabase = createServiceClient()
@@ -94,7 +56,12 @@ const handler = createMcpHandler(
     server.tool(
       "search",
       "Search across code, memories, and GitHub data using natural language",
-      SearchSchema,
+      {
+        query: z.string().describe('Natural language search query'),
+        types: z.array(z.enum(['code', 'memory', 'github'])).optional().describe('Filter by entity types'),
+        limit: z.number().optional().default(20).describe('Maximum results'),
+        workspace: z.string().optional().describe('Specific workspace filter'),
+      },
       async ({ query, types, limit, workspace }) => {
         const session = neo4jDriver.session()
         try {
@@ -177,7 +144,13 @@ const handler = createMcpHandler(
     server.tool(
       "searchCode",
       "Search code with language-specific understanding",
-      SearchCodeSchema,
+      {
+        query: z.string().describe('Code pattern or natural language'),
+        language: z.string().optional().describe('Filter by programming language'),
+        project: z.string().optional().describe('Filter by project name'),
+        includeTests: z.boolean().optional().default(false),
+        includeImports: z.boolean().optional().default(true),
+      },
       async ({ query, language, project, includeTests, includeImports }) => {
         const session = neo4jDriver.session()
         try {
@@ -261,7 +234,14 @@ const handler = createMcpHandler(
     server.tool(
       "searchMemories",
       "Search development conversations and decisions",
-      SearchMemoriesSchema,
+      {
+        query: z.string().describe('Natural language query'),
+        dateRange: z.object({
+          start: z.string().optional(),
+          end: z.string().optional(),
+        }).optional(),
+        projects: z.array(z.string()).optional(),
+      },
       async ({ query, dateRange, projects }) => {
         const session = neo4jDriver.session()
         try {
@@ -349,7 +329,12 @@ const handler = createMcpHandler(
     server.tool(
       "exploreRelationships",
       "Find connections between entities in the knowledge graph",
-      ExploreRelationshipsSchema,
+      {
+        entityUri: z.string().describe('Starting entity URI'),
+        relationshipTypes: z.array(z.string()).optional(),
+        depth: z.number().max(3).optional().default(2),
+        direction: z.enum(['in', 'out', 'both']).optional().default('both'),
+      },
       async ({ entityUri, relationshipTypes, depth, direction }) => {
         const session = neo4jDriver.session()
         try {
@@ -444,7 +429,12 @@ const handler = createMcpHandler(
     server.tool(
       "inspectEntity",
       "Get comprehensive details about any entity",
-      InspectEntitySchema,
+      {
+        uri: z.string().describe('Entity URI to inspect'),
+        includeRelationships: z.boolean().optional().default(true),
+        includeContent: z.boolean().optional().default(true),
+        includeSimilar: z.boolean().optional().default(false),
+      },
       async ({ uri, includeRelationships, includeContent, includeSimilar }) => {
         const session = neo4jDriver.session()
         try {
@@ -474,7 +464,7 @@ const handler = createMcpHandler(
           const entity = entityRecord.get('n').properties
           const labels = entityRecord.get('labels')
 
-          let relationships = []
+          let relationships: any[] = []
           if (includeRelationships) {
             const relQuery = `
               MATCH (n {id: $entityId})-[r]-(m)
@@ -499,7 +489,7 @@ const handler = createMcpHandler(
             }))
           }
 
-          let similar = []
+          let similar: any[] = []
           if (includeSimilar && entity.embedding) {
             const similarQuery = `
               CALL db.index.vector.queryNodes('unified_embeddings', 6, $embedding)
@@ -547,11 +537,6 @@ const handler = createMcpHandler(
         }
       }
     )
-
-    // Clean up Neo4j driver on server close
-    server.onClose(async () => {
-      await neo4jDriver.close()
-    })
   },
   {
     capabilities: {

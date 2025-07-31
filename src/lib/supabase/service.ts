@@ -5,7 +5,7 @@ import { Database } from '@/types/supabase'
  * Create a Supabase client for service-level operations
  * This bypasses Row Level Security (RLS) and should only be used in secure server-side contexts
  */
-export async function createServiceClient() {
+export function createServiceClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 

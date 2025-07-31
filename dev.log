@@ -11979,3 +11979,615 @@ HTTP 52872: outgoing message end.
 HTTP 52872: server socket close
 HTTP 52872: server socket close
  ✓ Compiled in 361ms (3383 modules)
+ ✓ Compiled in 268ms (1750 modules)
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER socketOnParserExecute 4230
+HTTP 52872: SERVER socketOnParserExecute 4066
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4068
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4054
+HTTP 52872: SERVER socketOnParserExecute 4066
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4068
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+ ✓ Compiled /_not-found in 382ms (3386 modules)
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: write ret = true
+HTTP 52872: server socket close
+ GET /_next/static/css/app/layout.css 404 in 437ms
+HTTP 52872: server socket close
+ ✓ Compiled in 275ms (1750 modules)
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER socketOnParserExecute 4230
+HTTP 52872: SERVER socketOnParserExecute 4066
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4068
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+ ⨯ Error: Cannot find module './8948.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/app/memories/page.js:23:7701
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/app/memories/page.js:23:7774)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:84
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:26)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36)
+    at async DevServer.findPageComponents (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1917:24)
+    at async DevServer.renderToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ],
+  page: '/memories'
+}
+ ⨯ Error: Cannot find module './1682.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/pages/_document.js:1:340
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/pages/_document.js:1:383)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:72:65
+    at async Promise.all (index 0)
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:71:33)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ]
+}
+Error: Cannot find module './8948.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/app/memories/page.js:23:7701
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/app/memories/page.js:23:7774)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:84
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:26)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36)
+    at async DevServer.findPageComponents (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1917:24)
+    at async DevServer.renderToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ],
+  page: '/memories'
+}
+ ⨯ Error: Cannot find module './1682.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/pages/_document.js:1:340
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/pages/_document.js:1:383)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:72:65
+    at async Promise.all (index 0)
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:71:33)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ]
+}
+Error: ENOENT: no such file or directory, open '/Users/srao/supastate/.next/fallback-build-manifest.json'
+    at readFileSync (node:fs:442:20)
+    at loadManifest (/Users/srao/supastate/node_modules/next/dist/server/load-manifest.js:35:54)
+    at loadManifestWithRetries (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:40:51)
+    at async loadDefaultErrorComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-default-error-components.js:30:24)
+    at async DevServer.getFallbackErrorComponents (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:594:16)
+    at async DevServer.renderErrorToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:2210:40)
+    at async pipe.req.req (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:2063:30)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:389:24)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/srao/supastate/.next/fallback-build-manifest.json'
+}
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 4182
+ ⨯ Error: Cannot find module './8948.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/app/memories/page.js:23:7701
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/app/memories/page.js:23:7774)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:84
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:26)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36)
+    at async DevServer.findPageComponents (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1917:24)
+    at async DevServer.renderToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ],
+  page: '/memories'
+}
+ ⨯ Error: Cannot find module './1682.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/pages/_document.js:1:340
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/pages/_document.js:1:383)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:72:65
+    at async Promise.all (index 0)
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:71:33)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ]
+}
+Error: Cannot find module './8948.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/app/memories/page.js:23:7701
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/app/memories/page.js:23:7774)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:84
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:98:26)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36)
+    at async DevServer.findPageComponents (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1917:24)
+    at async DevServer.renderToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:1969:32)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:816:17)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async handleRequest (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:353:24)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:377:13)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ],
+  page: '/memories'
+}
+ ⨯ Error: Cannot find module './1682.js'
+Require stack:
+- /Users/srao/supastate/.next/server/webpack-runtime.js
+- /Users/srao/supastate/.next/server/app/_not-found/page.js
+- /Users/srao/supastate/node_modules/next/dist/server/require.js
+- /Users/srao/supastate/node_modules/next/dist/server/load-components.js
+- /Users/srao/supastate/node_modules/next/dist/build/utils.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js
+- /Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js
+    at Function.<anonymous> (node:internal/modules/cjs/loader:1401:15)
+    at /Users/srao/supastate/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+    at Function._load (node:internal/modules/cjs/loader:1211:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at __webpack_require__.f.require (/Users/srao/supastate/.next/server/webpack-runtime.js:198:28)
+    at /Users/srao/supastate/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/srao/supastate/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/srao/supastate/.next/server/webpack-runtime.js:162:22)
+    at /Users/srao/supastate/.next/server/pages/_document.js:1:340
+    at Object.<anonymous> (/Users/srao/supastate/.next/server/pages/_document.js:1:383)
+    at Module._compile (node:internal/modules/cjs/loader:1730:14)
+    at Object..js (node:internal/modules/cjs/loader:1895:10)
+    at Module.load (node:internal/modules/cjs/loader:1465:32)
+    at Function._load (node:internal/modules/cjs/loader:1282:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1487:12)
+    at mod.require (/Users/srao/supastate/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:135:16)
+    at requirePage (/Users/srao/supastate/node_modules/next/dist/server/require.js:109:84)
+    at /Users/srao/supastate/node_modules/next/dist/server/load-components.js:72:65
+    at async Promise.all (index 0)
+    at async loadComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:71:33)
+    at async DevServer.findPageComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/next-server.js:710:36) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/srao/supastate/.next/server/webpack-runtime.js',
+    '/Users/srao/supastate/.next/server/app/_not-found/page.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/require.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/load-components.js',
+    '/Users/srao/supastate/node_modules/next/dist/build/utils.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js'
+  ]
+}
+Error: ENOENT: no such file or directory, open '/Users/srao/supastate/.next/fallback-build-manifest.json'
+    at readFileSync (node:fs:442:20)
+    at loadManifest (/Users/srao/supastate/node_modules/next/dist/server/load-manifest.js:35:54)
+    at loadManifestWithRetries (/Users/srao/supastate/node_modules/next/dist/server/load-components.js:40:51)
+    at async loadDefaultErrorComponentsImpl (/Users/srao/supastate/node_modules/next/dist/server/load-default-error-components.js:30:24)
+    at async DevServer.getFallbackErrorComponents (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:594:16)
+    at async DevServer.renderErrorToResponseImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:2210:40)
+    at async pipe.req.req (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:2063:30)
+    at async DevServer.pipeImpl (/Users/srao/supastate/node_modules/next/dist/server/base-server.js:920:25)
+    at async /Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/srao/supastate/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/srao/supastate/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:174:21)
+    at async requestHandlerImpl (/Users/srao/supastate/node_modules/next/dist/server/lib/router-server.js:389:24)
+    at async Server.requestListener (/Users/srao/supastate/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Users/srao/supastate/.next/fallback-build-manifest.json'
+}
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+ GET /memories 500 in 428ms
+ GET /memories 500 in 208ms
+HTTP 52872: server socket close
+HTTP 52872: server socket close
+ ✓ Compiled in 144ms (1750 modules)
+ ✓ Compiled in 139ms (1750 modules)
+ ✓ Compiled in 138ms (1750 modules)
+ ✓ Compiled in 155ms (1750 modules)
+ ✓ Compiled in 142ms (1750 modules)
+ ✓ Compiled in 166ms (1750 modules)
+ ✓ Compiled in 156ms (1750 modules)
+ ✓ Compiled in 176ms (1750 modules)
