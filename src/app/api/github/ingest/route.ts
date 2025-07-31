@@ -1,11 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { NextRequest, NextResponse } from 'next/server'
 import { createGitHubClient } from '@/lib/github/client'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    
     // This endpoint requires service role authentication
     const authHeader = request.headers.get('authorization')
     if (!authHeader?.includes(process.env.SUPABASE_SERVICE_ROLE_KEY!)) {
@@ -14,6 +12,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    
+    // Use service client to bypass RLS
+    const supabase = await createServiceClient()
 
     const body = await request.json()
     const { repository_url, github_token, force_refresh = false, user_id } = body as {

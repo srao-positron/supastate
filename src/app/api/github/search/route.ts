@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const accessibleRepos = userRepos.map(ur => ur.repository.full_name)
+    const accessibleRepos = userRepos.map(ur => (ur.repository as any).full_name)
     
     // Apply repository filter if provided
     const reposToSearch = filters?.repositories?.length 
@@ -259,6 +259,123 @@ export async function POST(request: NextRequest) {
               size: file.size,
               branch: file.branch,
               content_preview: file.content?.substring(0, 500)
+            }
+          })
+        }
+      }
+
+      // Search functions
+      if (!filters?.entity_types || filters.entity_types.includes('functions')) {
+        const functionQuery = `
+          CALL db.index.vector.queryNodes('github_function_embedding', $limit, $embedding)
+          YIELD node AS func, score
+          MATCH (func)<-[:HAS_FUNCTION]-(r:Repository)
+          WHERE r.full_name IN $repos AND score > 0.6
+          RETURN func, r.full_name AS repo_name, score, 'function' AS type
+          ORDER BY score DESC
+          LIMIT $limit
+        `
+
+        const functionResult = await session.run(functionQuery, {
+          embedding: queryEmbedding,
+          repos: reposToSearch,
+          limit: parseInt(limit.toString())
+        })
+
+        for (const record of functionResult.records) {
+          const func = serializeNeo4jData(record.get('func'))
+          results.push({
+            type: 'function',
+            score: record.get('score'),
+            repository: record.get('repo_name'),
+            data: {
+              id: func.id,
+              name: func.name,
+              signature: func.signature,
+              docstring: func.docstring,
+              start_line: func.start_line,
+              end_line: func.end_line,
+              is_async: func.is_async,
+              is_exported: func.is_exported
+            }
+          })
+        }
+      }
+
+      // Search classes
+      if (!filters?.entity_types || filters.entity_types.includes('classes')) {
+        const classQuery = `
+          CALL db.index.vector.queryNodes('github_class_embedding', $limit, $embedding)
+          YIELD node AS cls, score
+          MATCH (cls)<-[:HAS_CLASS]-(r:Repository)
+          WHERE r.full_name IN $repos AND score > 0.6
+          RETURN cls, r.full_name AS repo_name, score, 'class' AS type
+          ORDER BY score DESC
+          LIMIT $limit
+        `
+
+        const classResult = await session.run(classQuery, {
+          embedding: queryEmbedding,
+          repos: reposToSearch,
+          limit: parseInt(limit.toString())
+        })
+
+        for (const record of classResult.records) {
+          const cls = serializeNeo4jData(record.get('cls'))
+          results.push({
+            type: 'class',
+            score: record.get('score'),
+            repository: record.get('repo_name'),
+            data: {
+              id: cls.id,
+              name: cls.name,
+              extends: cls.extends,
+              implements: cls.implements,
+              docstring: cls.docstring,
+              start_line: cls.start_line,
+              end_line: cls.end_line,
+              is_exported: cls.is_exported,
+              method_count: cls.method_count,
+              property_count: cls.property_count
+            }
+          })
+        }
+      }
+
+      // Search interfaces
+      if (!filters?.entity_types || filters.entity_types.includes('interfaces')) {
+        const interfaceQuery = `
+          CALL db.index.vector.queryNodes('github_interface_embedding', $limit, $embedding)
+          YIELD node AS iface, score
+          MATCH (iface)<-[:HAS_INTERFACE]-(r:Repository)
+          WHERE r.full_name IN $repos AND score > 0.6
+          RETURN iface, r.full_name AS repo_name, score, 'interface' AS type
+          ORDER BY score DESC
+          LIMIT $limit
+        `
+
+        const interfaceResult = await session.run(interfaceQuery, {
+          embedding: queryEmbedding,
+          repos: reposToSearch,
+          limit: parseInt(limit.toString())
+        })
+
+        for (const record of interfaceResult.records) {
+          const iface = serializeNeo4jData(record.get('iface'))
+          results.push({
+            type: 'interface',
+            score: record.get('score'),
+            repository: record.get('repo_name'),
+            data: {
+              id: iface.id,
+              name: iface.name,
+              extends: iface.extends,
+              docstring: iface.docstring,
+              start_line: iface.start_line,
+              end_line: iface.end_line,
+              is_exported: iface.is_exported,
+              property_count: iface.property_count,
+              method_count: iface.method_count
             }
           })
         }

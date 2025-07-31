@@ -335,6 +335,29 @@ serve(async (req, connInfo) => {
       }
 
       queuedCount++
+      
+      // Queue GitHub reference detection for this code entity
+      console.log(`[Ingest Code] Queueing GitHub reference detection for entity ${finalEntityId}`)
+      try {
+        const detectResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/detect-github-references`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            code_entity_id: finalEntityId
+          })
+        })
+        
+        if (detectResponse.ok) {
+          const detectResult = await detectResponse.json()
+          console.log(`[Ingest Code] GitHub detection result: ${detectResult.detected} references found, ${detectResult.queued} queued`)
+        }
+      } catch (detectError) {
+        console.error('[Ingest Code] Failed to detect GitHub references:', detectError)
+        // Don't fail the main operation if GitHub detection fails
+      }
     }
 
     // Update task with actual file count

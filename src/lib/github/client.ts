@@ -238,6 +238,157 @@ export class GitHubClient {
     }
   }
 
+  // Branch operations
+  async listBranches(owner: string, repo: string, options?: {
+    per_page?: number
+    page?: number
+  }) {
+    this.requestCount++
+    const { data } = await this.octokit.repos.listBranches({
+      owner,
+      repo,
+      per_page: options?.per_page || 100,
+      page: options?.page || 1
+    })
+    this.updateRateLimit(data)
+    return data
+  }
+
+  async getBranch(owner: string, repo: string, branch: string) {
+    this.requestCount++
+    const { data } = await this.octokit.repos.getBranch({
+      owner,
+      repo,
+      branch
+    })
+    this.updateRateLimit(data)
+    return data
+  }
+
+  // Compare branches to get changed files
+  async compareBranches(owner: string, repo: string, base: string, head: string) {
+    this.requestCount++
+    const { data } = await this.octokit.repos.compareCommits({
+      owner,
+      repo,
+      base,
+      head
+    })
+    this.updateRateLimit(data)
+    return {
+      files: data.files || [],
+      ahead_by: data.ahead_by,
+      behind_by: data.behind_by,
+      status: data.status,
+      total_commits: data.total_commits,
+      commits: data.commits
+    }
+  }
+
+  // Get multiple files in a single request (more efficient)
+  async getMultipleFiles(
+    owner: string, 
+    repo: string, 
+    branch: string,
+    filePaths: string[]
+  ): Promise<Array<{
+    path: string
+    content?: string
+    status: 'added' | 'modified' | 'removed' | 'error'
+    error?: string
+  }>> {
+    const results = []
+    
+    // Batch files to reduce API calls
+    for (const path of filePaths) {
+      try {
+        const content = await this.getContent(owner, repo, path, branch)
+        if (!Array.isArray(content) && content.type === 'file') {
+          results.push({
+            path,
+            content: content.content,
+            status: 'modified' as const
+          })
+        }
+      } catch (error: any) {
+        if (error.status === 404) {
+          results.push({
+            path,
+            status: 'removed' as const
+          })
+        } else {
+          results.push({
+            path,
+            status: 'error' as const,
+            error: error.message
+          })
+        }
+      }
+    }
+    
+    return results
+  }
+
+  // Check if webhook is active
+  async getWebhookStatus(owner: string, repo: string, hook_id: number) {
+    try {
+      this.requestCount++
+      const { data } = await this.octokit.repos.getWebhook({
+        owner,
+        repo,
+        hook_id
+      })
+      this.updateRateLimit(data)
+      return {
+        active: data.active,
+        events: data.events,
+        last_response: data.last_response,
+        updated_at: data.updated_at
+      }
+    } catch (error: any) {
+      if (error.status === 404) {
+        return { active: false, error: 'Webhook not found' }
+      }
+      throw error
+    }
+  }
+
+  // Get repository activity summary
+  async getRepoActivity(owner: string, repo: string, options?: {
+    since?: Date
+  }) {
+    const since = options?.since?.toISOString()
+    
+    // Get recent issues
+    const issues = await this.listIssues(owner, repo, {
+      state: 'all',
+      since,
+      per_page: 100
+    })
+    
+    // Get recent commits
+    const commits = await this.listCommits(owner, repo, {
+      since,
+      per_page: 100
+    })
+    
+    // Get open PRs
+    const { data: pulls } = await this.octokit.pulls.list({
+      owner,
+      repo,
+      state: 'all',
+      sort: 'updated',
+      direction: 'desc',
+      per_page: 100
+    })
+    
+    return {
+      issues,
+      commits,
+      pulls: pulls.filter(pr => !since || new Date(pr.updated_at) > new Date(since))
+    }
+  }
+
   // Pagination helper
   async *paginate<T>(
     method: (options: any) => Promise<T[]>,

@@ -130,7 +130,10 @@ export async function POST(request: NextRequest) {
       issues: 0,
       pull_requests: 0,
       commits: 0,
-      files: 0
+      files: 0,
+      functions: 0,
+      classes: 0,
+      interfaces: 0
     }
 
     try {
@@ -249,12 +252,31 @@ export async function POST(request: NextRequest) {
 
       // Determine what to crawl
       let crawlTargets = []
+      let branchName = job.github_repositories.default_branch || 'main'
+      
       if (job.crawl_type === 'initial' || job.crawl_type === 'manual') {
         crawlTargets = ['issues', 'pulls', 'commits', 'files']
       } else if (job.crawl_type === 'webhook') {
         crawlTargets = job.data.updates || []
       } else if (job.crawl_type === 'update') {
         crawlTargets = ['issues', 'pulls', 'commits']
+      } else if (job.crawl_type === 'branch') {
+        // Branch-specific crawling
+        branchName = job.branch_name || branchName
+        crawlTargets = ['files'] // Only crawl files for branch imports
+        
+        await supabase.rpc('log_github_activity', {
+          p_function_name: 'github-crawl-api',
+          p_level: 'info',
+          p_message: `Starting branch crawl for ${branchName}`,
+          p_job_id: job_id,
+          p_repository_full_name: job.github_repositories.full_name,
+          p_details: {
+            branch: branchName,
+            crawl_scope: job.crawl_scope,
+            files_to_crawl: job.data?.files_to_crawl?.length || 0
+          }
+        })
       }
 
       // Crawl issues
@@ -547,45 +569,72 @@ export async function POST(request: NextRequest) {
         })
 
         try {
-          // Get repository tree
-          const tree = await githubClient.getTree(
-            job.github_repositories.owner,
-            job.github_repositories.name,
-            job.github_repositories.default_branch || 'main',
-            true // recursive
-          )
+          // For branch crawls with delta scope, only process specified files
+          let filesToProcess = []
           
-          apiCallCount++
+          if (job.crawl_type === 'branch' && job.crawl_scope === 'delta' && job.data?.files_to_crawl?.length > 0) {
+            // Delta crawl - only process changed files
+            filesToProcess = job.data.files_to_crawl
+            
+            await supabase.rpc('log_github_activity', {
+              p_function_name: 'github-crawl-api',
+              p_level: 'info',
+              p_message: `Delta crawl: processing ${filesToProcess.length} changed files`,
+              p_job_id: job_id,
+              p_repository_full_name: job.github_repositories.full_name,
+              p_details: { 
+                branch: branchName,
+                files: filesToProcess.slice(0, 10) // Log first 10 files
+              }
+            })
+          } else {
+            // Full crawl - get entire tree
+            const tree = await githubClient.getTree(
+              job.github_repositories.owner,
+              job.github_repositories.name,
+              branchName,
+              true // recursive
+            )
+          
+            apiCallCount++
 
-          // Filter for code files
-          const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rs', '.cpp', '.c', '.h']
-          const codeFiles = tree.tree.filter((item: any) => 
-            item.type === 'blob' && 
-            codeExtensions.some(ext => item.path.endsWith(ext)) &&
-            item.size < 100000 // Skip large files
-          )
+            // Filter for code files
+            const codeExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rs', '.cpp', '.c', '.h']
+            const codeFiles = tree.tree.filter((item: any) => 
+              item.type === 'blob' && 
+              codeExtensions.some(ext => item.path.endsWith(ext)) &&
+              item.size < 100000 // Skip large files
+            )
+            
+            filesToProcess = codeFiles.map(f => f.path)
+          }
 
           await supabase.rpc('log_github_activity', {
             p_function_name: 'github-crawl-api',
             p_level: 'info',
-            p_message: `Found ${codeFiles.length} code files to process`,
+            p_message: `Found ${filesToProcess.length} code files to process`,
             p_job_id: job_id,
             p_repository_full_name: job.github_repositories.full_name,
-            p_details: { file_count: codeFiles.length }
+            p_details: { 
+              file_count: filesToProcess.length,
+              branch: branchName,
+              crawl_scope: job.crawl_scope || 'full'
+            }
           })
 
           // Process files in batches to avoid rate limits
           const batchSize = 10
-          for (let i = 0; i < codeFiles.length; i += batchSize) {
-            const batch = codeFiles.slice(i, i + batchSize)
+          for (let i = 0; i < filesToProcess.length; i += batchSize) {
+            const batch = filesToProcess.slice(i, i + batchSize)
             
-            for (const file of batch) {
+            for (const filePath of batch) {
               try {
-                // Get file content
+                // Get file content from the specified branch
                 const content = await githubClient.getContent(
                   job.github_repositories.owner,
                   job.github_repositories.name,
-                  file.path
+                  filePath,
+                  branchName
                 )
                 apiCallCount++
 
@@ -594,9 +643,10 @@ export async function POST(request: NextRequest) {
                 // Decode base64 content
                 const decodedContent = Buffer.from(content.content, 'base64').toString('utf-8')
                 
-                // For now, just store the file - parsing will come later
+                // Generate embedding for file content
                 const contentEmbedding = await generateEmbedding(decodedContent.substring(0, 4000))
 
+                // Store the file
                 await session.run(
                   `
                   MERGE (f:RepoFile {id: $id})
@@ -616,34 +666,64 @@ export async function POST(request: NextRequest) {
                   MERGE (r)-[:HAS_FILE]->(f)
                   `,
                   {
-                    id: `${job.github_repositories.full_name}#${file.path}`,
-                    path: file.path,
-                    name: file.path.split('/').pop(),
-                    language: file.path.split('.').pop(),
-                    size: file.size,
+                    id: `${job.github_repositories.full_name}#${branchName}#${filePath}`,
+                    path: filePath,
+                    name: filePath.split('/').pop(),
+                    language: filePath.split('.').pop(),
+                    size: content.size,
                     content: decodedContent,
-                    branch: job.github_repositories.default_branch || 'main',
+                    branch: branchName,
                     commit_sha: content.sha,
                     content_embedding: contentEmbedding,
                     repo_github_id: repoData.id
                   }
                 )
                 entitiesProcessed.files++
+
+                // Queue code parsing for supported language files (async)
+                const ext = filePath.split('.').pop()?.toLowerCase()
+                if (ext && ['ts', 'tsx', 'js', 'jsx', 'py', 'go', 'java', 'rs'].includes(ext)) {
+                  const { data: msgId } = await supabase.rpc('queue_github_code_parsing', {
+                    p_repository_id: job.repository_id,
+                    p_file_id: `${job.github_repositories.full_name}#${branchName}#${filePath}`,
+                    p_file_path: filePath,
+                    p_file_content: decodedContent,
+                    p_language: ext,
+                    p_branch: branchName,
+                    p_commit_sha: content.sha
+                  })
+                  
+                  if (msgId) {
+                    await supabase.rpc('log_github_activity', {
+                      p_function_name: 'github-crawl-api',
+                      p_level: 'debug',
+                      p_message: `Queued code parsing for ${filePath}`,
+                      p_job_id: job_id,
+                      p_repository_full_name: job.github_repositories.full_name,
+                      p_details: { 
+                        file: filePath, 
+                        branch: branchName,
+                        queue_msg_id: msgId,
+                        language: ext
+                      }
+                    })
+                  }
+                }
               } catch (fileError: any) {
                 await supabase.rpc('log_github_activity', {
                   p_function_name: 'github-crawl-api',
                   p_level: 'warning',
-                  p_message: `Failed to process file ${file.path}`,
+                  p_message: `Failed to process file ${filePath}`,
                   p_job_id: job_id,
                   p_repository_full_name: job.github_repositories.full_name,
                   p_error_code: fileError.status || 'FILE_ERROR',
-                  p_details: { file: file.path, error: String(fileError) }
+                  p_details: { file: filePath, branch: branchName, error: String(fileError) }
                 })
               }
             }
 
             // Rate limit pause between batches
-            if (i + batchSize < codeFiles.length) {
+            if (i + batchSize < filesToProcess.length) {
               await new Promise(resolve => setTimeout(resolve, 1000))
             }
           }

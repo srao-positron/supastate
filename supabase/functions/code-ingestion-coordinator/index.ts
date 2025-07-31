@@ -93,7 +93,7 @@ serve(async (req) => {
 
     // Distribute messages among workers
     const messagesPerWorker = Math.ceil(allMessages.length / WORKER_COUNT)
-    const workerPromises = []
+    let workersSpawned = 0
     
     for (let i = 0; i < WORKER_COUNT; i++) {
       const workerId = `${batchId}-worker-${i}`
@@ -105,8 +105,8 @@ serve(async (req) => {
         continue // Skip if no messages for this worker
       }
       
-      // Spawn background task with specific messages
-      const workerPromise = fetch(`${supabaseUrl}/functions/v1/code-ingestion-worker`, {
+      // Spawn background task with specific messages (fire and forget)
+      fetch(`${supabaseUrl}/functions/v1/code-ingestion-worker`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${supabaseServiceKey}`,
@@ -119,63 +119,31 @@ serve(async (req) => {
           totalWorkers: WORKER_COUNT,
           messages: workerMessages // Pass specific messages to worker
         })
+      }).catch(err => {
+        console.error(`Failed to spawn worker ${i}:`, err)
       })
 
-      workerPromises.push(workerPromise)
+      workersSpawned++
       
-      await logger.info(`Spawned code worker ${i} with ${workerMessages.length} messages`, { 
+      await logger.info(`Spawned background worker ${i} with ${workerMessages.length} messages`, { 
         workerId,
         messageCount: workerMessages.length
       })
     }
 
-    // Wait for all workers to complete their processing
-    await logger.info('Waiting for workers to complete processing...')
-    
-    const results = await Promise.allSettled(workerPromises)
-    let totalProcessed = 0
-    let totalErrors = 0
-    const workerResults = []
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i]
-      if (result.status === 'fulfilled' && result.value.ok) {
-        try {
-          const workerResponse = await result.value.json()
-          totalProcessed += workerResponse.processed || 0
-          totalErrors += workerResponse.errors?.length || 0
-          workerResults.push({
-            worker: i,
-            processed: workerResponse.processed,
-            errors: workerResponse.errors?.length || 0
-          })
-        } catch (e) {
-          await logger.error(`Failed to parse worker ${i} response`, e)
-        }
-      } else {
-        await logger.error(`Worker ${i} failed`, result.status === 'rejected' ? result.reason : 'Response not ok')
-        workerResults.push({
-          worker: i,
-          error: result.status === 'rejected' ? result.reason?.message : 'Request failed'
-        })
-      }
-    }
-
-    await logger.info('All workers completed', { 
-      totalProcessed,
-      totalErrors,
-      workerResults
+    await logger.info('All workers spawned as background tasks', { 
+      workersSpawned,
+      totalMessages: allMessages.length
     })
 
     await dbLogger.close()
 
     return new Response(
       JSON.stringify({ 
-        message: `Processed ${totalProcessed} code entities with ${totalErrors} errors`,
-        processed: totalProcessed,
-        errors: totalErrors,
-        workerResults,
-        queueLength: allMessages.length
+        message: `Spawned ${workersSpawned} workers to process ${allMessages.length} messages`,
+        workersSpawned,
+        messagesQueued: allMessages.length,
+        batchId
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -95,32 +95,10 @@ serve(async (req) => {
     })
 
     const results = []
+    let queuedCount = 0
 
     for (const job of pendingJobs) {
       try {
-        // Mark job as processing
-        const { error: updateError } = await supabase
-          .from('github_crawl_queue')
-          .update({
-            status: 'processing',
-            started_at: new Date().toISOString(),
-            attempts: job.attempts + 1
-          })
-          .eq('id', job.id)
-          .eq('status', 'pending') // Ensure no race condition
-
-        if (updateError) {
-          console.error(`[GitHub Crawl Coordinator] Failed to mark job ${job.id} as processing:`, updateError)
-          await logGitHubActivity(supabase, 'error', `Failed to mark job as processing`, {
-            job_id: job.id,
-            repository_id: job.repository_id,
-            repository_full_name: job.github_repositories?.full_name,
-            error_code: updateError.code,
-            details: { error: updateError }
-          })
-          continue
-        }
-
         // Get a GitHub token - either from job data or find a user with access
         let githubToken = job.data?.github_token
 
@@ -181,32 +159,58 @@ serve(async (req) => {
           github_token: githubToken
         }
 
-        // Call the worker function
-        const workerResponse = await supabase.functions.invoke('github-crawl-worker', {
-          body: workerPayload
+        // Send job to PGMQ queue for async processing
+        const { data: sendResult, error: sendError } = await supabase.rpc('pgmq_send', {
+          queue_name: 'github_crawl',
+          msg: workerPayload
         })
 
-        if (workerResponse.error) {
-          throw workerResponse.error
+        if (sendError) {
+          throw sendError
         }
 
+        // Mark job as queued
+        const { error: updateError } = await supabase
+          .from('github_crawl_queue')
+          .update({
+            status: 'queued',
+            queued_at: new Date().toISOString(),
+            attempts: job.attempts + 1
+          })
+          .eq('id', job.id)
+          .eq('status', 'pending') // Ensure no race condition
+
+        if (updateError) {
+          console.error(`[GitHub Crawl Coordinator] Failed to mark job ${job.id} as queued:`, updateError)
+          await logGitHubActivity(supabase, 'error', `Failed to mark job as queued`, {
+            job_id: job.id,
+            repository_id: job.repository_id,
+            repository_full_name: job.github_repositories?.full_name,
+            error_code: updateError.code,
+            details: { error: updateError }
+          })
+          continue
+        }
+
+        queuedCount++
         results.push({
           job_id: job.id,
           repository: job.github_repositories.full_name,
-          status: 'dispatched'
+          status: 'queued',
+          pgmq_id: sendResult
         })
 
-        console.log(`[GitHub Crawl Coordinator] Dispatched job ${job.id} for ${job.github_repositories.full_name}`)
-        await logGitHubActivity(supabase, 'info', 'Dispatched job to worker', {
+        console.log(`[GitHub Crawl Coordinator] Queued job ${job.id} for ${job.github_repositories.full_name} to PGMQ`)
+        await logGitHubActivity(supabase, 'info', 'Queued job to PGMQ for async processing', {
           job_id: job.id,
           repository_id: job.repository_id,
           repository_full_name: job.github_repositories.full_name,
-          details: { crawl_type: job.crawl_type }
+          details: { crawl_type: job.crawl_type, pgmq_id: sendResult }
         })
 
       } catch (error) {
         console.error(`[GitHub Crawl Coordinator] Error processing job ${job.id}:`, error)
-        await logGitHubActivity(supabase, 'error', 'Error processing job', {
+        await logGitHubActivity(supabase, 'error', 'Error queueing job', {
           job_id: job.id,
           repository_id: job.repository_id,
           repository_full_name: job.github_repositories?.full_name,
@@ -215,28 +219,6 @@ serve(async (req) => {
           details: { error: String(error) }
         })
         
-        // Mark job as failed if max attempts reached
-        if (job.attempts >= 2) {
-          await supabase
-            .from('github_crawl_queue')
-            .update({
-              status: 'failed',
-              error: error.message || 'Unknown error',
-              error_details: { error: String(error) },
-              completed_at: new Date().toISOString()
-            })
-            .eq('id', job.id)
-        } else {
-          // Revert to pending for retry
-          await supabase
-            .from('github_crawl_queue')
-            .update({
-              status: 'pending',
-              scheduled_for: new Date(Date.now() + 5 * 60 * 1000).toISOString() // Retry in 5 minutes
-            })
-            .eq('id', job.id)
-        }
-
         results.push({
           job_id: job.id,
           repository: job.github_repositories?.full_name || 'unknown',
@@ -246,9 +228,35 @@ serve(async (req) => {
       }
     }
 
+    // If we queued any jobs, spawn background workers to process them
+    if (queuedCount > 0) {
+      // Spawn workers as background tasks (fire and forget)
+      const workerCount = Math.min(queuedCount, 3) // Max 3 workers
+      for (let i = 0; i < workerCount; i++) {
+        // Fire and forget - don't await
+        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/github-crawl-worker`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ batch_size: 5 })
+        }).catch(err => {
+          console.error(`[GitHub Crawl Coordinator] Failed to spawn worker ${i}:`, err)
+        })
+        
+        console.log(`[GitHub Crawl Coordinator] Spawned background worker ${i}`)
+      }
+      
+      await logGitHubActivity(supabase, 'info', `Spawned ${workerCount} background workers`, {
+        details: { worker_count: workerCount, queued_jobs: queuedCount }
+      })
+    }
+
     return new Response(
       JSON.stringify({
-        processed: results.length,
+        queued: queuedCount,
+        workers_spawned: queuedCount > 0 ? Math.min(queuedCount, 3) : 0,
         results
       }),
       {

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.2'
 import { Octokit } from 'https://esm.sh/@octokit/rest@19.0.11'
-import neo4j from 'https://esm.sh/neo4j-driver@5.23.0'
+import neo4j from 'https://unpkg.com/neo4j-driver@5.12.0/lib/browser/neo4j-web.esm.js'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,50 +110,94 @@ serve(async (req) => {
   let apiCallCount = 0
 
   try {
-    const job: CrawlJob = await req.json()
+    const { batch_size = 1 } = await req.json()
     
-    console.log(`[GitHub Crawl Worker] Processing job ${job.job_id} for ${job.repository.full_name}`)
-    await logGitHubActivity(supabase, 'info', `Starting crawl for ${job.repository.full_name}`, {
-      job_id: job.job_id,
-      repository_id: job.repository.id,
-      repository_full_name: job.repository.full_name,
-      details: { crawl_type: job.crawl_type }
+    console.log(`[GitHub Crawl Worker] Starting to process ${batch_size} jobs from queue`)
+    
+    // Read messages from PGMQ queue
+    const { data: messages, error: readError } = await supabase.rpc('pgmq_read', {
+      queue_name: 'github_crawl',
+      vt: 600, // 10 minute visibility timeout
+      qty: batch_size
     })
-
-    // Initialize GitHub client
-    const octokit = new Octokit({
-      auth: job.github_token,
-    })
-
-    // Initialize Neo4j
-    const driver = neo4j.driver(
-      Deno.env.get('NEO4J_URI') ?? '',
-      neo4j.auth.basic(
-        Deno.env.get('NEO4J_USER') ?? '',
-        Deno.env.get('NEO4J_PASSWORD') ?? ''
+    
+    if (readError || !messages || messages.length === 0) {
+      console.log('[GitHub Crawl Worker] No messages to process')
+      return new Response(
+        JSON.stringify({ 
+          processed: 0, 
+          message: 'No messages to process',
+          error: readError?.message 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
-    )
-
-    const session = driver.session()
-    const entitiesProcessed = {
-      repository: 0,
-      issues: 0,
-      pull_requests: 0,
-      commits: 0,
-      files: 0,
-      functions: 0,
-      classes: 0
     }
+    
+    console.log(`[GitHub Crawl Worker] Found ${messages.length} messages to process`)
+    
+    const results = []
+    const processedIds = []
+    
+    for (const msg of messages) {
+      const job: CrawlJob = msg.message
+      
+      if (!job || !job.repository) {
+        console.error('[GitHub Crawl Worker] Invalid job structure:', msg)
+        processedIds.push(msg.msg_id)
+        continue
+      }
+    
+      console.log(`[GitHub Crawl Worker] Processing job ${job.job_id} for ${job.repository.full_name}`)
+      await logGitHubActivity(supabase, 'info', `Starting crawl for ${job.repository.full_name}`, {
+        job_id: job.job_id,
+        repository_id: job.repository.id,
+        repository_full_name: job.repository.full_name,
+        details: { crawl_type: job.crawl_type }
+      })
+      
+      try {
 
-    try {
-      // Start crawl
-      await supabase
-        .from('github_repositories')
-        .update({
-          crawl_status: 'crawling',
-          crawl_started_at: new Date().toISOString()
+        // Initialize GitHub client
+        const octokit = new Octokit({
+          auth: job.github_token,
         })
-        .eq('id', job.repository.id)
+
+        // Initialize Neo4j
+        const driver = neo4j.driver(
+          Deno.env.get('NEO4J_URI') ?? '',
+          neo4j.auth.basic(
+            Deno.env.get('NEO4J_USER') ?? '',
+            Deno.env.get('NEO4J_PASSWORD') ?? ''
+          )
+        )
+
+        const session = driver.session()
+        const entitiesProcessed = {
+          repository: 0,
+          issues: 0,
+          pull_requests: 0,
+          commits: 0,
+          files: 0,
+          functions: 0,
+          classes: 0
+        }
+        // Mark job as processing in github_crawl_queue
+        await supabase
+          .from('github_crawl_queue')
+          .update({
+            status: 'processing',
+            started_at: new Date().toISOString()
+          })
+          .eq('id', job.job_id)
+
+        // Start crawl
+        await supabase
+          .from('github_repositories')
+          .update({
+            crawl_status: 'crawling',
+            crawl_started_at: new Date().toISOString()
+          })
+          .eq('id', job.repository.id)
 
       // Create or update repository node in Neo4j
       console.log(`[GitHub Crawl Worker] Creating repository node`)
@@ -338,57 +382,93 @@ serve(async (req) => {
           api_calls_made: 10 // TODO: Track actual API calls
         })
 
-      console.log(`[GitHub Crawl Worker] Completed crawl for ${job.repository.full_name}`, entitiesProcessed)
-
-      return new Response(
-        JSON.stringify({
-          success: true,
+        await session.close()
+        await driver.close()
+        
+        console.log(`[GitHub Crawl Worker] Completed crawl for ${job.repository.full_name}`, entitiesProcessed)
+        
+        processedIds.push(msg.msg_id)
+        results.push({
+          job_id: job.job_id,
+          repository: job.repository.full_name,
+          status: 'completed',
           entities_processed: entitiesProcessed
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-
-    } finally {
-      await session.close()
-      await driver.close()
-    }
-
-  } catch (error) {
-    console.error('[GitHub Crawl Worker] Error:', error)
-    
-    // Update job status
-    if (job?.job_id) {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
-      
-      await supabase
-        .from('github_crawl_queue')
-        .update({
-          status: 'failed',
-          error: error.message || 'Unknown error',
-          error_details: { error: String(error), stack: error.stack },
-          completed_at: new Date().toISOString()
         })
-        .eq('id', job.job_id)
+        
+      } catch (jobError) {
+        console.error(`[GitHub Crawl Worker] Error processing job ${job.job_id}:`, jobError)
+        
+        // Update job status to failed
+        await supabase
+          .from('github_crawl_queue')
+          .update({
+            status: 'failed',
+            error: jobError.message || 'Unknown error',
+            error_details: { error: String(jobError), stack: jobError.stack },
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', job.job_id)
 
-      // Update repository status
-      if (job?.repository?.id) {
+        // Update repository status
         await supabase
           .from('github_repositories')
           .update({
             crawl_status: 'failed',
-            crawl_error: error.message || 'Unknown error'
+            crawl_error: jobError.message || 'Unknown error'
           })
           .eq('id', job.repository.id)
+          
+        await logGitHubActivity(supabase, 'error', 'Job processing failed', {
+          job_id: job.job_id,
+          repository_id: job.repository.id,
+          repository_full_name: job.repository.full_name,
+          error_code: jobError.code || 'UNKNOWN',
+          error_stack: jobError.stack,
+          details: { error: String(jobError) }
+        })
+        
+        // Still mark message as processed to avoid infinite retries
+        processedIds.push(msg.msg_id)
+        results.push({
+          job_id: job.job_id,
+          repository: job.repository.full_name,
+          status: 'failed',
+          error: jobError.message
+        })
       }
     }
-
+    
+    // Delete processed messages from queue
+    if (processedIds.length > 0) {
+      await supabase.rpc('pgmq_delete', {
+        queue_name: 'github_crawl',
+        msg_ids: processedIds
+      })
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        processed: processedIds.length,
+        results
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+
+  } catch (error) {
+    console.error('[GitHub Crawl Worker] Fatal error:', error)
+    await logGitHubActivity(supabase, 'fatal', 'Worker fatal error', {
+      error_code: error.code || 'FATAL',
+      error_stack: error.stack,
+      details: { error: String(error) }
+    })
+    
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        stack: error.stack 
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
