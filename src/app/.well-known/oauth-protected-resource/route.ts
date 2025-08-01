@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server'
 
-// OAuth 2.0 Protected Resource Metadata
+// OAuth 2.0 Protected Resource Metadata (RFC 9728)
 // This tells MCP clients how this resource server is protected
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.supastate.ai'
   
+  // According to RFC 9728, this should point to the authorization server
+  // In our case, we use Supabase/GitHub OAuth
   return NextResponse.json({
-    resource: baseUrl,
-    authorization_servers: [baseUrl],
+    resource: `${baseUrl}/mcp`,
+    authorization_servers: [
+      `${baseUrl}/.well-known/oauth-authorization-server`
+    ],
+    scopes_supported: ['read', 'write'],
     bearer_methods_supported: ['header'],
-    resource_documentation: `${baseUrl}/docs/api`,
-    resource_signing_alg_values_supported: ['RS256'],
-    resource_policy_uri: `${baseUrl}/policy`,
-    resource_tos_uri: `${baseUrl}/terms`,
+    resource_documentation: `${baseUrl}/docs/mcp`,
+    resource_signing_alg_values_supported: ['HS256'],
   })
 }
 

@@ -46,13 +46,14 @@ async function handleMcpRequest(request: NextRequest) {
     return new NextResponse(
       JSON.stringify({
         error: 'unauthorized',
-        error_description: 'Authentication required. Please authenticate via OAuth.'
+        error_description: 'Authentication required. Please authenticate via OAuth.',
+        auth_url: `${baseUrl}/api/mcp/auth`
       }),
       {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer realm="${baseUrl}", authorization_uri="${baseUrl}/api/mcp/oauth/authorize"`,
+          'WWW-Authenticate': `Bearer realm="${baseUrl}", as_uri="${baseUrl}/.well-known/oauth-protected-resource"`,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -69,42 +70,21 @@ async function handleMcpRequest(request: NextRequest) {
     const token = authHeader.slice(7)
     
     try {
-      // Try to decode our custom token format
-      const tokenData = JSON.parse(Buffer.from(token, 'base64url').toString())
+      // Validate Supabase JWT
+      const supabase = await createClient()
+      const { data: { user }, error } = await supabase.auth.getUser(token)
       
-      // Validate token hasn't expired
-      if (tokenData.expires_at && tokenData.expires_at < Date.now()) {
+      if (error || !user) {
         return new NextResponse(
           JSON.stringify({
             error: 'unauthorized',
-            error_description: 'Token expired'
+            error_description: 'Invalid or expired token'
           }),
           {
             status: 401,
             headers: {
               'Content-Type': 'application/json',
-              'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Token expired"`,
-              'Access-Control-Allow-Origin': '*',
-            },
-          }
-        )
-      }
-      
-      // Get user info
-      const supabase = createServiceClient()
-      const { data: userData } = await supabase.auth.admin.getUserById(tokenData.user_id)
-      
-      if (!userData.user) {
-        return new NextResponse(
-          JSON.stringify({
-            error: 'unauthorized',
-            error_description: 'Invalid user'
-          }),
-          {
-            status: 401,
-            headers: {
-              'Content-Type': 'application/json',
-              'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Invalid user"`,
+              'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Invalid or expired token"`,
               'Access-Control-Allow-Origin': '*',
             },
           }
@@ -115,23 +95,24 @@ async function handleMcpRequest(request: NextRequest) {
       const { data: userRecord } = await supabase
         .from('users')
         .select('id, team_id')
-        .eq('id', tokenData.user_id)
+        .eq('id', user.id)
         .single()
       
-      userId = tokenData.user_id
-      workspaceId = userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${tokenData.user_id}`
+      userId = user.id
+      workspaceId = userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${user.id}`
     } catch (e) {
+      console.error('Token validation error:', e)
       // If token validation fails, return 401
       return new NextResponse(
         JSON.stringify({
           error: 'unauthorized',
-          error_description: 'Invalid token'
+          error_description: 'Token validation failed'
         }),
         {
           status: 401,
           headers: {
             'Content-Type': 'application/json',
-            'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Invalid token format"`,
+            'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Token validation failed"`,
             'Access-Control-Allow-Origin': '*',
           },
         }
