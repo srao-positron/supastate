@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
       const mcpData = JSON.parse(Buffer.from(data, 'base64url').toString())
       redirect_uri = mcpData.redirect_uri
       state = mcpData.state
+      console.error('[MCP Debug] Decoded callback data:', mcpData)
     } catch (e) {
+      console.error('[MCP Debug] Failed to decode callback data:', e)
       return NextResponse.json(
         { error: 'Invalid callback data' },
         { status: 400 }
@@ -63,9 +65,39 @@ export async function GET(request: NextRequest) {
     userId: user.id
   })
   
+  // Get user's team info for additional context
+  const { data: userRecord } = await supabase
+    .from('users')
+    .select('id, team_id')
+    .eq('id', user.id)
+    .single()
+  
   const callbackUrl = new URL(redirect_uri)
   callbackUrl.searchParams.set('code', authCode)
   if (state) callbackUrl.searchParams.set('state', state)
+  
+  // Add additional context like Stripe does
+  callbackUrl.searchParams.set('user_id', user.id)
+  if (userRecord?.team_id) {
+    callbackUrl.searchParams.set('team_id', userRecord.team_id)
+    callbackUrl.searchParams.set('workspace_id', `team:${userRecord.team_id}`)
+  } else {
+    callbackUrl.searchParams.set('workspace_id', `user:${user.id}`)
+  }
+  
+  // Log the complete redirect URL we're sending back
+  console.error('[MCP Debug] ===========================================')
+  console.error('[MCP Debug] FINAL REDIRECT TO CLAUDE:')
+  console.error('[MCP Debug] Full URL:', callbackUrl.toString())
+  console.error('[MCP Debug] Parameters:')
+  console.error('[MCP Debug]   - code:', authCode.substring(0, 50) + '...')
+  console.error('[MCP Debug]   - state:', state)
+  console.error('[MCP Debug]   - user_id:', user.id)
+  console.error('[MCP Debug]   - workspace_id:', userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${user.id}`)
+  if (userRecord?.team_id) {
+    console.error('[MCP Debug]   - team_id:', userRecord.team_id)
+  }
+  console.error('[MCP Debug] ===========================================')
   
   return NextResponse.redirect(callbackUrl)
 }

@@ -29,6 +29,10 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Check if redirect_uri is to Claude's callback endpoint
+  const isClaudeCallback = redirect_uri.includes('claude.ai/api/mcp/auth_callback')
+  console.error('[MCP Debug] Is Claude callback URL:', isClaudeCallback, redirect_uri)
+
   // Check if user is authenticated
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
@@ -41,10 +45,15 @@ export async function GET(request: NextRequest) {
       redirect_uri,
       client_id,
       state,
+      response_type,
+      code_challenge,
+      code_challenge_method,
       type: 'mcp_auth'
     })).toString('base64url')
     
     loginUrl.searchParams.set('redirect_to', `/api/mcp/auth/callback?data=${mcpCallback}`)
+    
+    console.error('[MCP Debug] Redirecting to login, will return to:', `/api/mcp/auth/callback?data=${mcpCallback}`)
     
     return NextResponse.redirect(loginUrl)
   }
@@ -54,6 +63,9 @@ export async function GET(request: NextRequest) {
   callbackUrl.searchParams.set('redirect_uri', redirect_uri)
   if (client_id) callbackUrl.searchParams.set('client_id', client_id)
   if (state) callbackUrl.searchParams.set('state', state)
+  
+  console.error('[MCP Debug] User already authenticated, redirecting to callback')
+  console.error('[MCP Debug] Callback URL:', callbackUrl.toString())
   
   return NextResponse.redirect(callbackUrl)
 }
