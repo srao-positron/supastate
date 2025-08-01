@@ -35,37 +35,49 @@ function inferTypeFromLabels(labels: string[]): string {
 
 const handler = createMcpHandler(
   async (server) => {
-    let userId: string
-    let workspaceId: string
-    
-    // Try to authenticate the user
-    // First check for session-based auth (direct browser access)
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    
-    if (!error && user) {
-      // User is authenticated via session
-      userId = user.id
+    // Helper function to get authenticated user
+    async function getAuthenticatedUser() {
+      // Try to authenticate the user
+      const supabase = await createClient()
+      const { data: { user }, error } = await supabase.auth.getUser()
       
-      // Get user workspace info
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, team_id')
-        .eq('id', user.id)
-        .single()
+      if (!error && user) {
+        // User is authenticated via session
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, team_id')
+          .eq('id', user.id)
+          .single()
 
-      workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${user.id}`
-    } else {
-      // For OAuth flow, the token validation would happen at a higher level
-      // For now, we'll require session authentication
-      throw new Error('Authentication required - please login at https://www.supastate.ai')
+        const workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${user.id}`
+        return { userId: user.id, workspaceId }
+      }
+      
+      // If no session auth, the MCP client should use OAuth
+      throw new Error('Authentication required. Please authenticate via OAuth.')
     }
 
-    // Initialize Neo4j
-    const neo4jDriver = neo4j.driver(
-      process.env.NEO4J_URI!,
-      neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-    )
+    // Helper to wrap tool handlers with authentication and Neo4j setup
+    function authenticatedTool<T extends Record<string, any>>(
+      handler: (params: T, context: { userId: string; workspaceId: string; neo4jDriver: any }) => Promise<any>
+    ) {
+      return async (params: T) => {
+        // Authenticate user when tool is invoked
+        const { userId, workspaceId } = await getAuthenticatedUser()
+        
+        // Initialize Neo4j for this request
+        const neo4jDriver = neo4j.driver(
+          process.env.NEO4J_URI!,
+          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
+        )
+        
+        try {
+          return await handler(params, { userId, workspaceId, neo4jDriver })
+        } finally {
+          await neo4jDriver.close()
+        }
+      }
+    }
 
     // Register tools
     server.tool(
@@ -77,7 +89,7 @@ const handler = createMcpHandler(
         limit: z.number().optional().default(20).describe('Maximum results'),
         workspace: z.string().optional().describe('Specific workspace filter'),
       },
-      async ({ query, types, limit, workspace }) => {
+      authenticatedTool(async ({ query, types, limit, workspace }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const ownershipFilter = getOwnershipFilter({
@@ -127,7 +139,7 @@ const handler = createMcpHandler(
             limit: limit || 20,
           })
 
-          const results = result.records.map(record => ({
+          const results = result.records.map((record: any) => ({
             id: record.get('id'),
             name: record.get('name'),
             type: inferTypeFromLabels(record.get('labels')),
@@ -153,7 +165,7 @@ const handler = createMcpHandler(
         } finally {
           await session.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -166,7 +178,7 @@ const handler = createMcpHandler(
         includeTests: z.boolean().optional().default(false),
         includeImports: z.boolean().optional().default(true),
       },
-      async ({ query, language, project, includeTests, includeImports }) => {
+      authenticatedTool(async ({ query, language, project, includeTests, includeImports }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const ownershipFilter = getOwnershipFilter({
@@ -212,7 +224,7 @@ const handler = createMcpHandler(
             project,
           })
 
-          const results = result.records.map(record => ({
+          const results = result.records.map((record: any) => ({
             id: record.get('id'),
             name: record.get('name'),
             type: record.get('entityType'),
@@ -243,7 +255,7 @@ const handler = createMcpHandler(
         } finally {
           await session.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -257,7 +269,7 @@ const handler = createMcpHandler(
         }).optional(),
         projects: z.array(z.string()).optional(),
       },
-      async ({ query, dateRange, projects }) => {
+      authenticatedTool(async ({ query, dateRange, projects }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const ownershipFilter = getOwnershipFilter({
@@ -308,7 +320,7 @@ const handler = createMcpHandler(
             projects,
           })
 
-          const results = result.records.map(record => ({
+          const results = result.records.map((record: any) => ({
             id: record.get('id'),
             sessionId: record.get('sessionId'),
             chunkId: record.get('chunkId'),
@@ -338,7 +350,7 @@ const handler = createMcpHandler(
         } finally {
           await session.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -350,7 +362,7 @@ const handler = createMcpHandler(
         depth: z.number().max(3).optional().default(2),
         direction: z.enum(['in', 'out', 'both']).optional().default('both'),
       },
-      async ({ entityUri, relationshipTypes, depth, direction }) => {
+      authenticatedTool(async ({ entityUri, relationshipTypes, depth, direction }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const [entityType, ...idParts] = entityUri.split('://')
@@ -407,7 +419,7 @@ const handler = createMcpHandler(
             depth: depth || 2,
           })
 
-          const relationships = result.records.map(record => ({
+          const relationships = result.records.map((record: any) => ({
             source: {
               id: record.get('startId'),
               name: record.get('startName'),
@@ -438,7 +450,7 @@ const handler = createMcpHandler(
         } finally {
           await session.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -450,7 +462,7 @@ const handler = createMcpHandler(
         includeContent: z.boolean().optional().default(true),
         includeSimilar: z.boolean().optional().default(false),
       },
-      async ({ uri, includeRelationships, includeContent, includeSimilar }) => {
+      authenticatedTool(async ({ uri, includeRelationships, includeContent, includeSimilar }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const [entityType, ...idParts] = uri.split('://')
@@ -493,7 +505,7 @@ const handler = createMcpHandler(
             `
 
             const relResult = await session.run(relQuery, { entityId })
-            relationships = relResult.records.map(record => ({
+            relationships = relResult.records.map((record: any) => ({
               type: record.get('type'),
               direction: record.get('isOutgoing') ? 'outgoing' : 'incoming',
               target: {
@@ -519,7 +531,7 @@ const handler = createMcpHandler(
               embedding: entity.embedding,
             })
 
-            similar = similarResult.records.map(record => ({
+            similar = similarResult.records.map((record: any) => ({
               id: record.get('id'),
               name: record.get('name'),
               type: inferTypeFromLabels(record.get('labels')),
@@ -550,7 +562,7 @@ const handler = createMcpHandler(
         } finally {
           await session.close()
         }
-      }
+      })
     )
   },
   {
