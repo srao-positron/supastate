@@ -14,16 +14,37 @@ if (!redisUrl) {
 }
 
 async function getEmbedding(text: string): Promise<number[]> {
-  const supabase = createServiceClient()
-  const { data, error } = await supabase.functions.invoke('generate-embeddings', {
-    body: { texts: [text] },
-  })
-
-  if (error || !data?.embeddings?.[0]) {
-    throw new Error('Failed to generate embedding')
+  const openAIKey = process.env.OPENAI_API_KEY
+  if (!openAIKey) {
+    throw new Error('OpenAI API key not configured')
   }
 
-  return data.embeddings[0]
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-large',
+        input: text,
+        dimensions: 3072
+      })
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('OpenAI API error:', error)
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.data[0].embedding
+  } catch (error) {
+    console.error('Failed to generate embedding:', error)
+    throw new Error('Failed to generate embedding')
+  }
 }
 
 function inferTypeFromLabels(labels: string[]): string {
