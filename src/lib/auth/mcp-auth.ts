@@ -98,8 +98,9 @@ export async function getMcpAuth(request: NextRequest): Promise<AuthInfo | null>
 
 /**
  * Create a WWW-Authenticate header for 401 responses
+ * This follows RFC 6750 and includes OAuth 2.0 parameters
  */
 export function createAuthenticateHeader(): string {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.supastate.ai'
-  return `Bearer realm="${baseUrl}", as_uri="${baseUrl}/.well-known/oauth-protected-resource"`
+  return `Bearer realm="${baseUrl}", authorization_uri="${baseUrl}/api/mcp/oauth/authorize", token_uri="${baseUrl}/api/mcp/oauth/token"`
 }
