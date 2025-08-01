@@ -1,10 +1,11 @@
-import { createMcpHandler, withMcpAuth } from "@vercel/mcp-adapter"
+import { createMcpHandler } from "@vercel/mcp-adapter"
 import { z } from "zod"
+import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import neo4j from 'neo4j-driver'
 import { getOwnershipFilter } from '@/lib/neo4j/query-patterns'
-import { NextRequest } from 'next/server'
-import { getMcpAuth, createAuthenticateHeader, AuthInfo } from '@/lib/auth/mcp-auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { getMcpAuth, createAuthenticateHeader } from '@/lib/auth/mcp-auth'
 
 // Ensure Redis is configured for MCP adapter
 const redisUrl = process.env.REDIS_URL || process.env.KV_URL
@@ -12,6 +13,7 @@ if (!redisUrl) {
   console.error('Redis URL not found. MCP adapter requires Redis for state management.')
   console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('REDIS') || k.includes('KV')))
 }
+
 
 async function getEmbedding(text: string): Promise<number[]> {
   const supabase = createServiceClient()
@@ -33,36 +35,51 @@ function inferTypeFromLabels(labels: string[]): string {
   return 'unknown'
 }
 
-// Authentication function for MCP
-async function verifyToken(request: Request, bearerToken?: string) {
-  // Convert Request to NextRequest for our auth function
-  const nextRequest = new NextRequest(request.url, {
-    headers: request.headers,
-    method: request.method,
-  })
-  
-  // Use our existing getMcpAuth function to verify the token
-  const authInfo = await getMcpAuth(nextRequest)
-  
-  if (authInfo && authInfo.authenticated) {
-    return {
-      token: bearerToken || '',
-      scopes: ['read', 'write'],
-      clientId: authInfo.userId!,
-      extra: {
-        userId: authInfo.userId,
-        workspaceId: authInfo.workspaceId
+const handler = createMcpHandler(
+  async (server) => {
+    // Helper function to get authenticated user
+    async function getAuthenticatedUser() {
+      // Try to authenticate the user
+      const supabase = await createClient()
+      const { data: { user }, error } = await supabase.auth.getUser()
+      
+      if (!error && user) {
+        // User is authenticated via session
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, team_id')
+          .eq('id', user.id)
+          .single()
+
+        const workspaceId = userData?.team_id ? `team:${userData.team_id}` : `user:${user.id}`
+        return { userId: user.id, workspaceId }
+      }
+      
+      // If no session auth, the MCP client should use OAuth
+      throw new Error('Authentication required. Please authenticate via OAuth.')
+    }
+
+    // Helper to wrap tool handlers with authentication and Neo4j setup
+    function authenticatedTool<T extends Record<string, any>>(
+      handler: (params: T, context: { userId: string; workspaceId: string; neo4jDriver: any }) => Promise<any>
+    ) {
+      return async (params: T) => {
+        // Authenticate user when tool is invoked
+        const { userId, workspaceId } = await getAuthenticatedUser()
+        
+        // Initialize Neo4j for this request
+        const neo4jDriver = neo4j.driver(
+          process.env.NEO4J_URI!,
+          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
+        )
+        
+        try {
+          return await handler(params, { userId, workspaceId, neo4jDriver })
+        } finally {
+          await neo4jDriver.close()
+        }
       }
     }
-  }
-  
-  return undefined
-}
-
-// Create the MCP handler
-const createHandler = () => {
-  const handler = createMcpHandler(
-    async (server) => {
 
     // Register tools
     server.tool(
@@ -74,30 +91,18 @@ const createHandler = () => {
         limit: z.number().optional().default(20).describe('Maximum results'),
         workspace: z.string().optional().describe('Specific workspace filter'),
       },
-      async (params, extra: any) => {
-        // Get auth info from extra parameter
-        if (!extra?.authInfo) {
-          throw new Error('Authentication required')
-        }
-        const { userId, workspaceId } = extra.authInfo.extra
-        
-        // Initialize Neo4j for this request
-        const neo4jDriver = neo4j.driver(
-          process.env.NEO4J_URI!,
-          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-        )
-        
+      authenticatedTool(async ({ query, types, limit, workspace }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const ownershipFilter = getOwnershipFilter({
-            userId: userId!,
-            workspaceId: workspaceId!,
+            userId,
+            workspaceId,
             nodeAlias: 'n',
           })
 
           let typeFilter = ''
-          if (params.types && params.types.length > 0) {
-            const labels = params.types.map(t => {
+          if (types && types.length > 0) {
+            const labels = types.map(t => {
               switch (t) {
                 case 'code': return 'CodeEntity'
                 case 'memory': return 'Memory'
@@ -130,10 +135,10 @@ const createHandler = () => {
               score
           `
 
-          const embedding = await getEmbedding(params.query)
+          const embedding = await getEmbedding(query)
           const result = await session.run(cypherQuery, {
             embedding,
-            limit: params.limit || 20,
+            limit: limit || 20,
           })
 
           const results = result.records.map((record: any) => ({
@@ -153,7 +158,7 @@ const createHandler = () => {
                 type: "text",
                 text: JSON.stringify({
                   results,
-                  query: params.query,
+                  query,
                   totalResults: results.length,
                 }, null, 2),
               },
@@ -161,9 +166,8 @@ const createHandler = () => {
           }
         } finally {
           await session.close()
-          await neo4jDriver.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -176,35 +180,23 @@ const createHandler = () => {
         includeTests: z.boolean().optional().default(false),
         includeImports: z.boolean().optional().default(true),
       },
-      async (params, extra: any) => {
-        // Get auth info from extra parameter
-        if (!extra?.authInfo) {
-          throw new Error('Authentication required')
-        }
-        const { userId, workspaceId } = extra.authInfo.extra
-        
-        // Initialize Neo4j for this request
-        const neo4jDriver = neo4j.driver(
-          process.env.NEO4J_URI!,
-          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-        )
-        
+      authenticatedTool(async ({ query, language, project, includeTests, includeImports }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const ownershipFilter = getOwnershipFilter({
-            userId: userId!,
-            workspaceId: workspaceId!,
+            userId,
+            workspaceId,
             nodeAlias: 'c',
           })
 
           let additionalFilters = ''
-          if (params.language) {
+          if (language) {
             additionalFilters += ` AND c.language = $language`
           }
-          if (params.project) {
+          if (project) {
             additionalFilters += ` AND c.project_name = $project`
           }
-          if (!params.includeTests) {
+          if (!includeTests) {
             additionalFilters += ` AND NOT c.file_path CONTAINS 'test'`
           }
 
@@ -227,11 +219,11 @@ const createHandler = () => {
               score
           `
 
-          const embedding = await getEmbedding(params.query)
+          const embedding = await getEmbedding(query)
           const result = await session.run(cypherQuery, {
             embedding,
-            language: params.language,
-            project: params.project,
+            language,
+            project,
           })
 
           const results = result.records.map((record: any) => ({
@@ -252,11 +244,11 @@ const createHandler = () => {
                 type: "text",
                 text: JSON.stringify({
                   results,
-                  query: params.query,
+                  query,
                   filters: {
-                    language: params.language,
-                    project: params.project,
-                    includeTests: params.includeTests,
+                    language,
+                    project,
+                    includeTests,
                   },
                 }, null, 2),
               },
@@ -264,9 +256,8 @@ const createHandler = () => {
           }
         } finally {
           await session.close()
-          await neo4jDriver.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -280,37 +271,27 @@ const createHandler = () => {
         }).optional(),
         projects: z.array(z.string()).optional(),
       },
-      async (params, extra: any) => {
-        if (!extra?.authInfo) {
-          throw new Error('Authentication required')
-        }
-        const { userId, workspaceId } = extra.authInfo.extra
-        
-        const neo4jDriver = neo4j.driver(
-          process.env.NEO4J_URI!,
-          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-        )
-        
+      authenticatedTool(async ({ query, dateRange, projects }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
           const ownershipFilter = getOwnershipFilter({
-            userId: userId!,
-            workspaceId: workspaceId!,
+            userId,
+            workspaceId,
             nodeAlias: 'm',
           })
 
           let dateFilter = ''
-          if (params.dateRange) {
-            if (params.dateRange.start) {
+          if (dateRange) {
+            if (dateRange.start) {
               dateFilter += ` AND m.occurred_at >= datetime($startDate)`
             }
-            if (params.dateRange.end) {
+            if (dateRange.end) {
               dateFilter += ` AND m.occurred_at <= datetime($endDate)`
             }
           }
 
           let projectFilter = ''
-          if (params.projects && params.projects.length > 0) {
+          if (projects && projects.length > 0) {
             projectFilter = ` AND m.project_name IN $projects`
           }
 
@@ -333,12 +314,12 @@ const createHandler = () => {
               score
           `
 
-          const embedding = await getEmbedding(params.query)
+          const embedding = await getEmbedding(query)
           const result = await session.run(cypherQuery, {
             embedding,
-            startDate: params.dateRange?.start,
-            endDate: params.dateRange?.end,
-            projects: params.projects,
+            startDate: dateRange?.start,
+            endDate: dateRange?.end,
+            projects,
           })
 
           const results = result.records.map((record: any) => ({
@@ -359,10 +340,10 @@ const createHandler = () => {
                 type: "text",
                 text: JSON.stringify({
                   results,
-                  query: params.query,
+                  query,
                   filters: {
-                    dateRange: params.dateRange,
-                    projects: params.projects,
+                    dateRange,
+                    projects,
                   },
                 }, null, 2),
               },
@@ -370,9 +351,8 @@ const createHandler = () => {
           }
         } finally {
           await session.close()
-          await neo4jDriver.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -384,37 +364,27 @@ const createHandler = () => {
         depth: z.number().max(3).optional().default(2),
         direction: z.enum(['in', 'out', 'both']).optional().default('both'),
       },
-      async (params, extra: any) => {
-        if (!extra?.authInfo) {
-          throw new Error('Authentication required')
-        }
-        const { userId, workspaceId } = extra.authInfo.extra
-        
-        const neo4jDriver = neo4j.driver(
-          process.env.NEO4J_URI!,
-          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-        )
-        
+      authenticatedTool(async ({ entityUri, relationshipTypes, depth, direction }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
-          const [entityType, ...idParts] = params.entityUri.split('://')
+          const [entityType, ...idParts] = entityUri.split('://')
           const entityId = idParts.join('://')
 
           const ownershipFilter = getOwnershipFilter({
-            userId: userId!,
-            workspaceId: workspaceId!,
+            userId,
+            workspaceId,
             nodeAlias: 'n',
           })
 
           let relationshipFilter = ''
-          if (params.relationshipTypes && params.relationshipTypes.length > 0) {
-            relationshipFilter = `[r:${params.relationshipTypes.join('|')}]`
+          if (relationshipTypes && relationshipTypes.length > 0) {
+            relationshipFilter = `[r:${relationshipTypes.join('|')}]`
           } else {
             relationshipFilter = '[r]'
           }
 
           let directionQuery = ''
-          switch (params.direction) {
+          switch (direction) {
             case 'out':
               directionQuery = `(start)-${relationshipFilter}->(end)`
               break
@@ -448,7 +418,7 @@ const createHandler = () => {
 
           const result = await session.run(cypherQuery, {
             entityId,
-            depth: params.depth || 2,
+            depth: depth || 2,
           })
 
           const relationships = result.records.map((record: any) => ({
@@ -471,19 +441,18 @@ const createHandler = () => {
               {
                 type: "text",
                 text: JSON.stringify({
-                  entityUri: params.entityUri,
+                  entityUri,
                   relationships,
                   totalRelationships: relationships.length,
-                  maxDepth: params.depth,
+                  maxDepth: depth,
                 }, null, 2),
               },
             ],
           }
         } finally {
           await session.close()
-          await neo4jDriver.close()
         }
-      }
+      })
     )
 
     server.tool(
@@ -495,25 +464,15 @@ const createHandler = () => {
         includeContent: z.boolean().optional().default(true),
         includeSimilar: z.boolean().optional().default(false),
       },
-      async (params, extra: any) => {
-        if (!extra?.authInfo) {
-          throw new Error('Authentication required')
-        }
-        const { userId, workspaceId } = extra.authInfo.extra
-        
-        const neo4jDriver = neo4j.driver(
-          process.env.NEO4J_URI!,
-          neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-        )
-        
+      authenticatedTool(async ({ uri, includeRelationships, includeContent, includeSimilar }, { userId, workspaceId, neo4jDriver }) => {
         const session = neo4jDriver.session()
         try {
-          const [entityType, ...idParts] = params.uri.split('://')
+          const [entityType, ...idParts] = uri.split('://')
           const entityId = idParts.join('://')
 
           const ownershipFilter = getOwnershipFilter({
-            userId: userId!,
-            workspaceId: workspaceId!,
+            userId,
+            workspaceId,
             nodeAlias: 'n',
           })
 
@@ -535,7 +494,7 @@ const createHandler = () => {
           const labels = entityRecord.get('labels')
 
           let relationships: any[] = []
-          if (params.includeRelationships) {
+          if (includeRelationships) {
             const relQuery = `
               MATCH (n {id: $entityId})-[r]-(m)
               WHERE ${ownershipFilter} AND ${ownershipFilter.replace('n.', 'm.')}
@@ -560,7 +519,7 @@ const createHandler = () => {
           }
 
           let similar: any[] = []
-          if (params.includeSimilar && entity.embedding) {
+          if (includeSimilar && entity.embedding) {
             const similarQuery = `
               CALL db.index.vector.queryNodes('unified_embeddings', 6, $embedding)
               YIELD node as s, score
@@ -590,23 +549,22 @@ const createHandler = () => {
               {
                 type: "text",
                 text: JSON.stringify({
-                  uri: params.uri,
+                  uri,
                   type: inferTypeFromLabels(labels),
                   entity: {
                     ...cleanEntity,
                     hasEmbedding: !!embedding,
                   },
-                  relationships: params.includeRelationships ? relationships : undefined,
-                  similar: params.includeSimilar ? similar : undefined,
+                  relationships: includeRelationships ? relationships : undefined,
+                  similar: includeSimilar ? similar : undefined,
                 }, null, 2),
               },
             ],
           }
         } finally {
           await session.close()
-          await neo4jDriver.close()
         }
-      }
+      })
     )
   },
   {
@@ -629,43 +587,13 @@ const createHandler = () => {
         },
       },
     },
-    },
-    {
-      basePath: "",
-      verboseLogs: true,
-      maxDuration: 60,
-      redisUrl,
-    }
-  )
+  },
+  {
+    basePath: "",
+    verboseLogs: true,
+    maxDuration: 60,
+    redisUrl: process.env.REDIS_URL || process.env.KV_URL,
+  }
+)
 
-  // Wrap with authentication
-  return withMcpAuth(handler, verifyToken)
-}
-
-// Create the authenticated handler
-const mcpHandler = createHandler()
-
-// Export the handler with proper authentication wrapper
-export async function GET(request: NextRequest) {
-  return mcpHandler(request)
-}
-
-export async function POST(request: NextRequest) {
-  return mcpHandler(request)
-}
-
-export async function DELETE(request: NextRequest) {
-  return mcpHandler(request)
-}
-
-// Handle OPTIONS for CORS
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
-}
+export { handler as GET, handler as POST, handler as DELETE }
