@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { SignJWT, jwtVerify } from 'jose'
+import { getAuthCode } from '@/lib/mcp/auth-codes'
 
 // MCP Token Exchange Endpoint
 // This endpoint exchanges authorization codes for MCP-specific tokens
@@ -47,43 +48,21 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Decode the authorization code
-      let codeData: any
-      try {
-        // Handle our short authorization codes (ac_xxxxx format)
-        if (code.startsWith('ac_')) {
-          const encoded = code.substring(3) // Remove 'ac_' prefix
-          // Pad the base64 string if needed
-          const padded = encoded + '='.repeat((4 - encoded.length % 4) % 4)
-          const decoded = Buffer.from(padded, 'base64url').toString()
-          codeData = JSON.parse(decoded)
-          
-          // Map short keys back to full keys
-          codeData = {
-            userId: codeData.u,
-            email: codeData.e,
-            timestamp: codeData.t,
-            exp: codeData.t + 5 * 60 * 1000 // 5 minutes from creation
-          }
-        } else {
-          // Fallback for old format (shouldn't happen with new codes)
-          codeData = JSON.parse(Buffer.from(code, 'base64url').toString())
-        }
-      } catch (e) {
-        console.error('[MCP Debug] Failed to decode authorization code:', e)
+      // Retrieve the stored auth code data
+      const codeData = getAuthCode(code)
+      
+      if (!codeData) {
+        console.error('[MCP Debug] Authorization code not found or expired:', code)
         return NextResponse.json({ 
           error: 'invalid_grant',
-          error_description: 'Invalid authorization code format' 
+          error_description: 'Invalid or expired authorization code' 
         }, { status: 400 })
       }
-
-      // Validate the code hasn't expired (5 minutes)
-      if (Date.now() > codeData.exp) {
-        return NextResponse.json({ 
-          error: 'invalid_grant',
-          error_description: 'Authorization code expired' 
-        }, { status: 400 })
-      }
+      
+      console.error('[MCP Debug] Retrieved auth code data:', {
+        userId: codeData.userId,
+        hasEmail: !!codeData.email
+      })
 
       // Get user data from Supabase using the stored user ID
       const supabase = await createClient()

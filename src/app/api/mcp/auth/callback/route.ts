@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { generateAuthCode, storeAuthCode } from '@/lib/mcp/auth-codes'
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -50,16 +51,10 @@ export async function GET(request: NextRequest) {
 
   // We have an authenticated user! Generate an authorization code
   // OAuth2 expects a short, opaque authorization code like Stripe's
-  // We'll store the actual user data in memory/Redis and just send a reference
-  const authCodeId = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  const authCode = generateAuthCode()
   
-  // Store the actual user data that we'll exchange for a token later
-  // For now, we'll encode it in the code but make it shorter
-  const authCode = `ac_${Buffer.from(JSON.stringify({
-    u: user.id,
-    e: user.email,
-    t: Date.now(),
-  })).toString('base64url').substring(0, 30)}`
+  // Store the user data associated with this code
+  storeAuthCode(authCode, user.id, user.email || '')
   
   // Log what we're sending back to Claude
   console.error('[MCP Debug] Sending authorization code back to Claude:', {
