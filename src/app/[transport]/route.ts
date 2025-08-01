@@ -38,12 +38,53 @@ async function handleMcpRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.supastate.ai'
   
+  // Log all incoming requests from Claude for debugging
+  const debugInfo: any = {
+    method: request.method,
+    url: request.url,
+    pathname: new URL(request.url).pathname,
+    headers: Object.fromEntries(request.headers.entries()),
+    hasAuth: !!authHeader,
+    authType: authHeader ? authHeader.substring(0, 20) + '...' : 'none'
+  }
+  
+  // Try to log body for POST requests
+  if (request.method === 'POST') {
+    try {
+      const clonedRequest = request.clone()
+      const body = await clonedRequest.text()
+      debugInfo.body = body
+      debugInfo.bodyLength = body.length
+    } catch (e) {
+      debugInfo.bodyError = 'Could not read body'
+    }
+  }
+  
+  console.error('[MCP Debug] Incoming request:', debugInfo)
+  
   // Check if this is a capabilities request
   const url = new URL(request.url)
   const isCapabilities = url.pathname.endsWith('/capabilities')
   
   // For non-capabilities requests, require authentication
   if (!isCapabilities && (!authHeader || !authHeader.startsWith('Bearer '))) {
+    const responseHeaders = {
+      'Content-Type': 'application/json',
+      'WWW-Authenticate': `Bearer resource_metadata=${baseUrl}/.well-known/oauth-protected-resource`,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    }
+    
+    console.error('[MCP Debug] Sending 401 response:', {
+      status: 401,
+      headers: responseHeaders,
+      body: {
+        error: 'unauthorized',
+        error_description: 'Authentication required',
+      }
+    })
+    
     return new NextResponse(
       JSON.stringify({
         error: 'unauthorized',
@@ -51,13 +92,7 @@ async function handleMcpRequest(request: NextRequest) {
       }),
       {
         status: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer resource_metadata=${baseUrl}/.well-known/oauth-protected-resource`,
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
+        headers: responseHeaders,
       }
     )
   }
@@ -134,6 +169,12 @@ async function handleMcpRequest(request: NextRequest) {
       )
     }
   }
+  
+  console.error('[MCP Debug] Authentication successful:', {
+    userId,
+    workspaceId,
+    isCapabilities
+  })
   
   // Create the MCP handler with auth context
   const handler = createMcpHandler(
