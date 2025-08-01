@@ -254,16 +254,24 @@ async function handleMcpRequest(request: NextRequest) {
             if (!params.types || params.types.length === 0) {
               // Query all types
               cypherQuery = `
-                // Search through EntitySummary nodes
-                CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit) * 2, $embedding)
-                YIELD node as s, score
-                WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
-                
-                // Get the actual entity
-                MATCH (s)-[:SUMMARIZES]->(n)
-                WHERE (n:Memory OR n:CodeEntity) AND ${ownershipFilter}
-                
-                WITH n, s, score
+                CALL {
+                  // Search memories directly
+                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
+                  YIELD node as m, score
+                  WHERE m:Memory AND ${ownershipFilter.replace(/n\./g, 'm.')}
+                  RETURN m as n, score, null as summary
+                  
+                  UNION
+                  
+                  // Search code via EntitySummary
+                  CALL db.index.vector.queryNodes('entity_summary_embedding', toInteger($limit), $embedding)
+                  YIELD node as s, score
+                  WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
+                  MATCH (s)-[:SUMMARIZES]->(c:CodeEntity)
+                  WHERE ${ownershipFilter.replace(/n\./g, 'c.')}
+                  RETURN c as n, score, s.summary as summary
+                }
+                WITH n, score, summary
                 ORDER BY score DESC
                 LIMIT toInteger($limit)
                 RETURN 
@@ -271,7 +279,7 @@ async function handleMcpRequest(request: NextRequest) {
                   COALESCE(n.name, n.path, n.title) as name,
                   n.type as type,
                   n.content as content,
-                  COALESCE(s.summary, n.summary) as summary,
+                  COALESCE(summary, n.summary) as summary,
                   n.file_path as filePath,
                   n.project_name as projectName,
                   labels(n) as labels,
@@ -282,24 +290,22 @@ async function handleMcpRequest(request: NextRequest) {
               const unionParts = []
               if (params.types.includes('memory')) {
                 unionParts.push(`
-                  // Search EntitySummary for memories
-                  CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit), $embedding)
-                  YIELD node as s, score
-                  WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
-                  MATCH (s)-[:SUMMARIZES]->(n:Memory)
-                  WHERE ${ownershipFilter}
-                  RETURN n, s, score
+                  // Search memories directly
+                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
+                  YIELD node as n, score
+                  WHERE n:Memory AND ${ownershipFilter}
+                  RETURN n, score, null as summary
                 `)
               }
               if (params.types.includes('code')) {
                 unionParts.push(`
-                  // Search EntitySummary for code
-                  CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit), $embedding)
+                  // Search code via EntitySummary
+                  CALL db.index.vector.queryNodes('entity_summary_embedding', toInteger($limit), $embedding)
                   YIELD node as s, score
                   WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
                   MATCH (s)-[:SUMMARIZES]->(n:CodeEntity)
                   WHERE ${ownershipFilter}
-                  RETURN n, s, score
+                  RETURN n, score, s.summary as summary
                 `)
               }
               
@@ -308,7 +314,7 @@ async function handleMcpRequest(request: NextRequest) {
                   CALL {
                     ${unionParts.join(' UNION ')}
                   }
-                  WITH n, s, score
+                  WITH n, score, summary
                   ORDER BY score DESC
                   LIMIT toInteger($limit)
                   RETURN 
@@ -316,7 +322,7 @@ async function handleMcpRequest(request: NextRequest) {
                     COALESCE(n.name, n.path, n.title) as name,
                     n.type as type,
                     n.content as content,
-                    COALESCE(s.summary, n.summary) as summary,
+                    COALESCE(summary, n.summary) as summary,
                     n.file_path as filePath,
                     n.project_name as projectName,
                     labels(n) as labels,
@@ -424,7 +430,7 @@ async function handleMcpRequest(request: NextRequest) {
 
             const cypherQuery = `
               // Search through EntitySummary nodes (which have embeddings)
-              CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit) * 2, $embedding)
+              CALL db.index.vector.queryNodes('entity_summary_embedding', toInteger($limit) * 2, $embedding)
               YIELD node as s, score
               WHERE s:EntitySummary AND ${ownershipFilter.replace(/c\./g, 's.')}
               
@@ -544,16 +550,11 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const cypherQuery = `
-              // Search through EntitySummary nodes (which have embeddings)
-              CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit) * 2, $embedding)
-              YIELD node as s, score
-              WHERE s:EntitySummary AND ${ownershipFilter.replace(/m\./g, 's.')}
-              
-              // Get the actual Memory
-              MATCH (s)-[:SUMMARIZES]->(m:Memory)
-              WHERE ${ownershipFilter} ${dateFilter} ${projectFilter}
-              
-              WITH m, s, score
+              // Search memories directly using memory_embeddings index
+              CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit) * 2, $embedding)
+              YIELD node as m, score
+              WHERE m:Memory AND ${ownershipFilter} ${dateFilter} ${projectFilter}
+              WITH m, score
               ORDER BY score DESC
               LIMIT toInteger($limit)
               RETURN 
@@ -561,7 +562,7 @@ async function handleMcpRequest(request: NextRequest) {
                 m.session_id as sessionId,
                 m.chunk_id as chunkId,
                 m.content as content,
-                COALESCE(s.summary, m.summary) as summary,
+                m.summary as summary,
                 m.occurred_at as occurredAt,
                 m.project_name as projectName,
                 m.metadata as metadata,
@@ -880,7 +881,7 @@ async function handleMcpRequest(request: NextRequest) {
                 WHERE sourceEmbedding IS NOT NULL
                 
                 // Find similar entities via EntitySummary embeddings
-                CALL db.index.vector.queryNodes('entity_summary_embeddings', 30, sourceEmbedding)
+                CALL db.index.vector.queryNodes('entity_summary_embedding', 30, sourceEmbedding)
                 YIELD node as similar_summary, score
                 WHERE similar_summary.id <> COALESCE(summary.id, n.id)
                   AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
@@ -1103,35 +1104,71 @@ async function handleMcpRequest(request: NextRequest) {
 
             let similar: any[] = []
             if (params.includeSimilar) {
-              // Use EntitySummary for similarity search
-              const similarQuery = `
-                // Find the EntitySummary for this entity
-                MATCH (s:EntitySummary)-[:SUMMARIZES]->(n {id: $entityId})
+              // Different approach based on entity type
+              const entityTypeQuery = `
+                MATCH (n {id: $entityId})
                 WHERE ${ownershipFilter}
-                
-                // Find similar entities via EntitySummary embeddings
-                CALL db.index.vector.queryNodes('entity_summary_embeddings', 10, s.embedding)
-                YIELD node as similar_summary, score
-                WHERE similar_summary.id <> s.id 
-                  AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
-                
-                // Get the actual entity
-                MATCH (similar_summary)-[:SUMMARIZES]->(similar_entity)
-                WHERE similar_entity:Memory OR similar_entity:CodeEntity
-                
-                RETURN 
-                  similar_entity.id as id, 
-                  COALESCE(similar_entity.name, similar_entity.path, similar_entity.title) as name, 
-                  labels(similar_entity) as labels, 
-                  score
-                LIMIT 5
+                RETURN labels(n) as labels, n.embedding IS NOT NULL as hasDirectEmbedding
               `
+              
+              const typeResult = await session.run(entityTypeQuery, {
+                ...ownershipParams,
+                entityId
+              })
+              
+              if (typeResult.records.length > 0) {
+                const labels = typeResult.records[0].get('labels')
+                const hasDirectEmbedding = typeResult.records[0].get('hasDirectEmbedding')
+                const isMemory = labels.includes('Memory')
+                
+                let similarQuery = ''
+                if (isMemory && hasDirectEmbedding) {
+                  // Memory with direct embedding - search memory_embeddings
+                  similarQuery = `
+                    MATCH (n:Memory {id: $entityId})
+                    WHERE ${ownershipFilter}
+                    CALL db.index.vector.queryNodes('memory_embeddings', 10, n.embedding)
+                    YIELD node as similar, score
+                    WHERE similar.id <> n.id 
+                      AND ${ownershipFilter.replace(/n\./g, 'similar.')}
+                    RETURN 
+                      similar.id as id, 
+                      COALESCE(similar.name, similar.title) as name, 
+                      labels(similar) as labels, 
+                      score
+                    LIMIT 5
+                  `
+                } else {
+                  // CodeEntity or Memory without embedding - search via EntitySummary
+                  similarQuery = `
+                    // Find the EntitySummary for this entity
+                    MATCH (s:EntitySummary)-[:SUMMARIZES]->(n {id: $entityId})
+                    WHERE ${ownershipFilter}
+                    
+                    // Find similar entities via EntitySummary embeddings
+                    CALL db.index.vector.queryNodes('entity_summary_embedding', 10, s.embedding)
+                    YIELD node as similar_summary, score
+                    WHERE similar_summary.id <> s.id 
+                      AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
+                    
+                    // Get the actual entity
+                    MATCH (similar_summary)-[:SUMMARIZES]->(similar_entity)
+                    WHERE similar_entity:Memory OR similar_entity:CodeEntity
+                    
+                    RETURN 
+                      similar_entity.id as id, 
+                      COALESCE(similar_entity.name, similar_entity.path, similar_entity.title) as name, 
+                      labels(similar_entity) as labels, 
+                      score
+                    LIMIT 5
+                  `
+                }
 
-              try {
-                const simResult = await session.run(similarQuery, {
-                  ...ownershipParams,
-                  entityId
-                })
+                try {
+                  const simResult = await session.run(similarQuery, {
+                    ...ownershipParams,
+                    entityId
+                  })
                 similar = simResult.records.map((record: any) => {
                   const similarType = inferTypeFromLabels(record.get('labels'))
                   const similarId = record.get('id')
@@ -1142,9 +1179,10 @@ async function handleMcpRequest(request: NextRequest) {
                     similarity: record.get('score'),
                   }
                 })
-              } catch (simError) {
-                console.error('Similar entity search failed:', simError)
-                // Continue without similar results
+                } catch (simError) {
+                  console.error('Similar entity search failed:', simError)
+                  // Continue without similar results
+                }
               }
             }
 
