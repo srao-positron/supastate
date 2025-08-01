@@ -870,78 +870,122 @@ async function handleMcpRequest(request: NextRequest) {
             // Get similar items if requested
             const similarItems: any[] = []
             if (params.includeSimilar) {
-              // Use EntitySummary for similarity search
-              const simQuery = `
-                // Find the EntitySummary for this entity
-                OPTIONAL MATCH (summary:EntitySummary)-[:SUMMARIZES]->(n {id: $entityId})
-                WHERE ${ownershipFilter}
-                
-                // Handle case where EntitySummary might not exist
-                WITH COALESCE(summary.embedding, n.embedding) as sourceEmbedding, n
-                WHERE sourceEmbedding IS NOT NULL
-                
-                // Find similar entities via EntitySummary embeddings
-                CALL db.index.vector.queryNodes('entity_summary_embedding', 30, sourceEmbedding)
-                YIELD node as similar_summary, score
-                WHERE similar_summary.id <> COALESCE(summary.id, n.id)
-                  AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
-                  AND score >= $threshold
-                
-                // Get the actual entity
-                MATCH (similar_summary)-[:SUMMARIZES]->(similar_entity)
-                WHERE similar_entity:Memory OR similar_entity:CodeEntity
-                
-                // Apply type filter if specified
-                WITH similar_entity, similar_summary, score
-                WHERE 
-                  ($includeAllTypes = true) OR
-                  (similar_entity:Memory AND $includeMemory = true) OR
-                  (similar_entity:CodeEntity AND $includeCode = true)
-                
-                RETURN 
-                  similar_entity.id as id,
-                  labels(similar_entity)[0] as type,
-                  score,
-                  COALESCE(similar_entity.name, similar_entity.path, similar_entity.title) as name,
-                  similar_entity.title as title,
-                  similar_entity.file_path as filePath,
-                  similar_entity.project_name as projectName,
-                  substring(COALESCE(similar_entity.content, similar_summary.summary, ''), 0, 200) as snippet,
-                  similar_entity as fullEntity
-                ORDER BY score DESC
-                LIMIT 10
-              `
-              
               try {
-                const simResult = await session.run(simQuery, {
+                // First check if the entity exists and get its type
+                const entityCheckQuery = `
+                  MATCH (n {id: $entityId})
+                  WHERE ${ownershipFilter}
+                  RETURN n, labels(n) as labels
+                  LIMIT 1
+                `
+                
+                const entityCheckResult = await session.run(entityCheckQuery, {
                   ...ownershipParams,
-                  entityId,
-                  threshold: params.similarityThreshold || 0.7,
-                  includeAllTypes: !params.types || params.types.length === 0,
-                  includeMemory: !params.types || params.types.includes('memory'),
-                  includeCode: !params.types || params.types.includes('code')
+                  entityId
                 })
                 
-                simResult.records.forEach((record: any) => {
-                  const entity = record.get('fullEntity').properties
-                  const type = inferTypeFromLabels([record.get('type')])
-                  const id = record.get('id')
-                  similarItems.push({
-                    id: `${type}:${id}`, // Return full URI format
-                    type,
-                    relationship: 'SIMILAR',
-                    similarity: record.get('score'),
-                    title: record.get('title') || record.get('name') || record.get('filePath'),
-                    snippet: record.get('snippet'),
-                    metadata: {
-                      reason: 'Semantic similarity',
-                      filePath: entity.file_path,
-                      language: entity.language,
-                      projectName: entity.project_name,
-                      occurredAt: entity.occurred_at,
-                    }
+                if (entityCheckResult.records.length === 0) {
+                  console.log('Entity not found for similarity search:', entityId)
+                } else {
+                  const entityLabels = entityCheckResult.records[0].get('labels')
+                  const isMemory = entityLabels.includes('Memory')
+                  
+                  // Different similarity search based on entity type
+                  let simQuery = ''
+                  if (isMemory) {
+                    // Memory has direct embeddings
+                    simQuery = `
+                      MATCH (source:Memory {id: $entityId})
+                      WHERE ${ownershipFilter.replace(/n\./g, 'source.')}
+                        AND source.embedding IS NOT NULL
+                      
+                      CALL db.index.vector.queryNodes('memory_embeddings', 20, source.embedding)
+                      YIELD node as similar, score
+                      WHERE similar.id <> source.id 
+                        AND ${ownershipFilter.replace(/n\./g, 'similar.')}
+                        AND score >= $threshold
+                      
+                      RETURN 
+                        similar.id as id,
+                        labels(similar)[0] as type,
+                        score,
+                        COALESCE(similar.name, similar.title) as name,
+                        similar.title as title,
+                        similar.file_path as filePath,
+                        similar.project_name as projectName,
+                        substring(COALESCE(similar.content, similar.summary, ''), 0, 200) as snippet,
+                        similar as fullEntity
+                      ORDER BY score DESC
+                      LIMIT toInteger($limit)
+                    `
+                  } else {
+                    // CodeEntity - search via EntitySummary
+                    simQuery = `
+                      // Get the EntitySummary for this code entity
+                      MATCH (summary:EntitySummary)-[:SUMMARIZES]->(source {id: $entityId})
+                      WHERE ${ownershipFilter.replace(/n\./g, 'source.')}
+                        AND summary.embedding IS NOT NULL
+                      
+                      // Find similar entities via EntitySummary
+                      CALL db.index.vector.queryNodes('entity_summary_embedding', 20, summary.embedding)
+                      YIELD node as similar_summary, score
+                      WHERE similar_summary.id <> summary.id 
+                        AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
+                        AND score >= $threshold
+                      
+                      // Get the actual entities
+                      MATCH (similar_summary)-[:SUMMARIZES]->(similar_entity)
+                      WHERE (similar_entity:Memory OR similar_entity:CodeEntity)
+                        AND ($includeAllTypes = true OR
+                             (similar_entity:Memory AND $includeMemory = true) OR
+                             (similar_entity:CodeEntity AND $includeCode = true))
+                      
+                      RETURN 
+                        similar_entity.id as id,
+                        labels(similar_entity)[0] as type,
+                        score,
+                        COALESCE(similar_entity.name, similar_entity.path, similar_entity.title) as name,
+                        similar_entity.title as title,
+                        similar_entity.file_path as filePath,
+                        similar_entity.project_name as projectName,
+                        substring(COALESCE(similar_entity.content, similar_summary.summary, ''), 0, 200) as snippet,
+                        similar_entity as fullEntity
+                      ORDER BY score DESC
+                      LIMIT toInteger($limit)
+                    `
+                  }
+                  
+                  const simResult = await session.run(simQuery, {
+                    ...ownershipParams,
+                    entityId,
+                    threshold: params.similarityThreshold || 0.7,
+                    includeAllTypes: !params.types || params.types.length === 0,
+                    includeMemory: !params.types || params.types.includes('memory'),
+                    includeCode: !params.types || params.types.includes('code'),
+                    limit: neo4j.int(10)
                   })
-                })
+                  
+                  simResult.records.forEach((record: any) => {
+                    const entity = record.get('fullEntity').properties
+                    const type = inferTypeFromLabels([record.get('type')])
+                    const id = record.get('id')
+                    similarItems.push({
+                      id: `${type}:${id}`, // Return full URI format
+                      type,
+                      relationship: 'SIMILAR',
+                      similarity: record.get('score'),
+                      title: record.get('title') || record.get('name') || record.get('filePath'),
+                      snippet: record.get('snippet'),
+                      metadata: {
+                        reason: 'Semantic similarity',
+                        filePath: entity.file_path,
+                        language: entity.language,
+                        projectName: entity.project_name,
+                        occurredAt: entity.occurred_at,
+                      }
+                    })
+                  })
+                }
               } catch (simError) {
                 console.error('Similar items search failed:', simError)
                 // Continue without similar results

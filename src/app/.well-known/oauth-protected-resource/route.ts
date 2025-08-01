@@ -7,10 +7,16 @@ export async function GET() {
   
   // According to RFC 9728, this should point to the authorization server
   // The resource is the SSE endpoint that MCP clients connect to
+  // Support both /sse and /messages endpoints
   return NextResponse.json({
     resource: `${baseUrl}/sse`,
     authorization_servers: [
       baseUrl  // Just the base URL, client will append /.well-known/oauth-authorization-server
+    ],
+    // Additional metadata to help MCP clients
+    alternate_resources: [
+      `${baseUrl}/messages`,
+      `${baseUrl}/sse`
     ]
   })
 }
