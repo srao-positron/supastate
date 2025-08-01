@@ -2,7 +2,7 @@ import { createMcpHandler } from "@vercel/mcp-adapter"
 import { z } from "zod"
 import { createServiceClient } from '@/lib/supabase/service'
 import neo4j from 'neo4j-driver'
-import { getOwnershipFilter } from '@/lib/neo4j/query-patterns'
+import { getOwnershipFilter, getOwnershipParams } from '@/lib/neo4j/query-patterns'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { jwtVerify } from 'jose'
@@ -207,7 +207,7 @@ async function handleMcpRequest(request: NextRequest) {
         {
           query: z.string().describe('Natural language search query'),
           types: z.array(z.enum(['code', 'memory', 'github'])).optional().describe('Filter by entity types'),
-          limit: z.number().optional().default(20).describe('Maximum results'),
+          limit: z.number().optional().default(10).describe('Maximum results (default: 10)'),
           workspace: z.string().optional().describe('Specific workspace filter'),
         },
         async (params) => {
@@ -333,9 +333,14 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const embedding = await getEmbedding(params.query)
+            const ownershipParams = getOwnershipParams({
+              userId,
+              workspaceId,
+            })
             const result = await session.run(cypherQuery, {
+              ...ownershipParams,
               embedding,
-              limit: params.limit || 20,
+              limit: params.limit || 10,
             })
 
             const results = result.records.map((record: any) => ({
@@ -427,7 +432,12 @@ async function handleMcpRequest(request: NextRequest) {
             `
 
             const embedding = await getEmbedding(params.query)
+            const ownershipParams = getOwnershipParams({
+              userId,
+              workspaceId,
+            })
             const result = await session.run(cypherQuery, {
+              ...ownershipParams,
               embedding,
               language: params.language,
               project: params.project,
@@ -532,7 +542,12 @@ async function handleMcpRequest(request: NextRequest) {
             `
 
             const embedding = await getEmbedding(params.query)
+            const ownershipParams = getOwnershipParams({
+              userId,
+              workspaceId,
+            })
             const result = await session.run(cypherQuery, {
+              ...ownershipParams,
               embedding,
               startDate: params.dateRange?.start,
               endDate: params.dateRange?.end,
@@ -643,7 +658,12 @@ async function handleMcpRequest(request: NextRequest) {
               LIMIT 50
             `
 
+            const ownershipParams = getOwnershipParams({
+              userId,
+              workspaceId,
+            })
             const result = await session.run(cypherQuery, {
+              ...ownershipParams,
               entityId,
               depth: params.depth || 2,
             })
@@ -720,7 +740,14 @@ async function handleMcpRequest(request: NextRequest) {
               RETURN n, labels(n) as labels
             `
 
-            const entityResult = await session.run(entityQuery, { entityId })
+            const ownershipParams = getOwnershipParams({
+              userId,
+              workspaceId,
+            })
+            const entityResult = await session.run(entityQuery, {
+              ...ownershipParams,
+              entityId
+            })
             
             if (entityResult.records.length === 0) {
               throw new Error('Entity not found or access denied')
@@ -743,7 +770,10 @@ async function handleMcpRequest(request: NextRequest) {
                 LIMIT 20
               `
 
-              const relResult = await session.run(relQuery, { entityId })
+              const relResult = await session.run(relQuery, {
+                ...ownershipParams,
+                entityId
+              })
               relationships = relResult.records.map((record: any) => ({
                 type: record.get('type'),
                 direction: record.get('isOutgoing') ? 'outgoing' : 'incoming',
@@ -772,7 +802,11 @@ async function handleMcpRequest(request: NextRequest) {
                   LIMIT 5
                 `
 
-                const simResult = await session.run(similarQuery, { entityId, indexName })
+                const simResult = await session.run(similarQuery, {
+                  ...ownershipParams,
+                  entityId,
+                  indexName
+                })
                 similar = simResult.records.map((record: any) => ({
                   id: record.get('id'),
                   name: record.get('name'),

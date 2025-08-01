@@ -12736,3 +12736,32 @@ HTTP 52872: server socket close
  ✓ Compiled in 227ms (1750 modules)
  ✓ Compiled in 289ms (1750 modules)
  ✓ Compiled in 252ms (1750 modules)
+HTTP 52872: SERVER new http connection
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 510
+HTTP 52872: SERVER new http connection
+HTTP 52872: SERVER socketOnParserExecute 509
+ ✓ Compiled /api/mcp in 393ms (1677 modules)
+HTTP 52872: outgoing message end.
+ POST /api/mcp 405 in 450ms
+HTTP 52872: SERVER socketOnParserExecute 308
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+HTTP 52872: SERVER socketOnParserExecute 307
+HTTP 52872: write ret = true
+HTTP 52872: outgoing message end.
+ GET /api/mcp 200 in 8ms
+HTTP 52872: server socket close
+HTTP 52872: server socket close
+ ✓ Compiled in 278ms (1750 modules)
+ ✓ Compiled in 232ms (1750 modules)
+ ✓ Compiled in 232ms (1750 modules)
+ ✓ Compiled in 227ms (1750 modules)
+ ✓ Compiled in 231ms (1750 modules)
+ ✓ Compiled in 232ms (1750 modules)
+ ✓ Compiled in 235ms (1750 modules)
+ ✓ Compiled in 276ms (1750 modules)
+ ✓ Compiled in 242ms (1750 modules)
+ ✓ Compiled in 231ms (1750 modules)
+ ✓ Compiled in 234ms (1750 modules)
