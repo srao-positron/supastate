@@ -246,24 +246,91 @@ async function handleMcpRequest(request: NextRequest) {
               }
             }
 
-            const cypherQuery = `
-              CALL db.index.vector.queryNodes('unified_embeddings', $limit + 10, $embedding)
-              YIELD node as n, score
-              WHERE ${ownershipFilter} ${typeFilter}
-              WITH n, score
-              ORDER BY score DESC
-              LIMIT $limit
-              RETURN 
-                n.id as id,
-                n.name as name,
-                n.type as type,
-                n.content as content,
-                n.summary as summary,
-                n.file_path as filePath,
-                n.project_name as projectName,
-                labels(n) as labels,
-                score
-            `
+            // Since Neo4j doesn't support multi-label vector indexes,
+            // we need to query each index separately and combine results
+            let cypherQuery = ''
+            
+            if (!params.types || params.types.length === 0) {
+              // Query all types
+              cypherQuery = `
+                CALL {
+                  CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
+                  YIELD node as n, score
+                  WHERE ${ownershipFilter}
+                  RETURN n, score
+                  UNION
+                  CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
+                  YIELD node as n, score
+                  WHERE ${ownershipFilter}
+                  RETURN n, score
+                }
+                WITH n, score
+                ORDER BY score DESC
+                LIMIT $limit
+                RETURN 
+                  n.id as id,
+                  n.name as name,
+                  n.type as type,
+                  n.content as content,
+                  n.summary as summary,
+                  n.file_path as filePath,
+                  n.project_name as projectName,
+                  labels(n) as labels,
+                  score
+              `
+            } else {
+              // Query specific types
+              const unionParts = []
+              if (params.types.includes('memory')) {
+                unionParts.push(`
+                  CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
+                  YIELD node as n, score
+                  WHERE ${ownershipFilter}
+                  RETURN n, score
+                `)
+              }
+              if (params.types.includes('code')) {
+                unionParts.push(`
+                  CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
+                  YIELD node as n, score
+                  WHERE ${ownershipFilter}
+                  RETURN n, score
+                `)
+              }
+              
+              if (unionParts.length > 0) {
+                cypherQuery = `
+                  CALL {
+                    ${unionParts.join(' UNION ')}
+                  }
+                  WITH n, score
+                  ORDER BY score DESC
+                  LIMIT $limit
+                  RETURN 
+                    n.id as id,
+                    n.name as name,
+                    n.type as type,
+                    n.content as content,
+                    n.summary as summary,
+                    n.file_path as filePath,
+                    n.project_name as projectName,
+                    labels(n) as labels,
+                    score
+                `
+              } else {
+                // No valid types, return empty
+                return {
+                  content: [{
+                    type: "text",
+                    text: JSON.stringify({
+                      results: [],
+                      query: params.query,
+                      totalResults: 0,
+                    }, null, 2),
+                  }],
+                }
+              }
+            }
 
             const embedding = await getEmbedding(params.query)
             const result = await session.run(cypherQuery, {
@@ -692,25 +759,27 @@ async function handleMcpRequest(request: NextRequest) {
             if (params.includeSimilar && entity.embedding) {
               const indexName = labels.includes('CodeEntity') ? 'code_embeddings' : 
                                labels.includes('Memory') ? 'memory_embeddings' : 
-                               'unified_embeddings'
+                               null
               
-              const similarQuery = `
-                MATCH (n {id: $entityId})
-                WHERE ${ownershipFilter}
-                CALL db.index.vector.queryNodes($indexName, 10, n.embedding)
-                YIELD node as s, score
-                WHERE s.id <> n.id AND ${ownershipFilter.replace('n.', 's.')}
-                RETURN s.id as id, s.name as name, labels(s) as labels, score
-                LIMIT 5
-              `
+              if (indexName) {
+                const similarQuery = `
+                  MATCH (n {id: $entityId})
+                  WHERE ${ownershipFilter}
+                  CALL db.index.vector.queryNodes($indexName, 10, n.embedding)
+                  YIELD node as s, score
+                  WHERE s.id <> n.id AND ${ownershipFilter.replace('n.', 's.')}
+                  RETURN s.id as id, s.name as name, labels(s) as labels, score
+                  LIMIT 5
+                `
 
-              const simResult = await session.run(similarQuery, { entityId, indexName })
-              similar = simResult.records.map((record: any) => ({
-                id: record.get('id'),
-                name: record.get('name'),
-                type: inferTypeFromLabels(record.get('labels')),
-                similarity: record.get('score'),
-              }))
+                const simResult = await session.run(similarQuery, { entityId, indexName })
+                similar = simResult.records.map((record: any) => ({
+                  id: record.get('id'),
+                  name: record.get('name'),
+                  type: inferTypeFromLabels(record.get('labels')),
+                  similarity: record.get('score'),
+                }))
+              }
             }
 
             // Clean up entity properties for output
