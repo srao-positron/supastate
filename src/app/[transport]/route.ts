@@ -5,6 +5,13 @@ import { createServiceClient } from '@/lib/supabase/service'
 import neo4j from 'neo4j-driver'
 import { getOwnershipFilter } from '@/lib/neo4j/query-patterns'
 
+// Ensure Redis is configured for MCP adapter
+const redisUrl = process.env.REDIS_URL || process.env.KV_URL
+if (!redisUrl) {
+  console.error('Redis URL not found. MCP adapter requires Redis for state management.')
+  console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('REDIS') || k.includes('KV')))
+}
+
 
 async function getEmbedding(text: string): Promise<number[]> {
   const supabase = createServiceClient()
@@ -571,6 +578,7 @@ const handler = createMcpHandler(
     basePath: "",
     verboseLogs: true,
     maxDuration: 60,
+    redisUrl: process.env.REDIS_URL || process.env.KV_URL,
   }
 )
 
