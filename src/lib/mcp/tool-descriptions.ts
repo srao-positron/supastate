@@ -10,8 +10,14 @@ export const TOOL_DESCRIPTIONS = {
 
 ## Overview
 This is your primary discovery tool for finding any information stored in Supastate. It uses 
-semantic search powered by OpenAI embeddings to find conceptually related content across all 
-entity types. Unlike keyword search, it understands meaning and context.
+an intelligent multi-strategy approach powered by Claude Haiku that analyzes your query intent 
+and selects the best combination of search strategies:
+
+- **Semantic Search**: Uses OpenAI embeddings to find conceptually related content
+- **Temporal Search**: Prioritizes recent or time-specific results
+- **Pattern Search**: Identifies debugging sessions, learning patterns, and problem-solving
+- **Code-Linked Search**: Finds code with related memories and vice versa
+- **Keyword Search**: Fallback for exact matches and specific terms
 
 **IMPORTANT**: Supastate is a KNOWLEDGE GRAPH where memories, code, and GitHub entities are 
 richly interconnected. Results now include contextual relationships - always examine the 
@@ -78,7 +84,14 @@ exploreRelationships, or getRelatedItems tools.
       "content": "We evaluated both options...",
       "summary": "Team discussion comparing Redis and Memcached for caching layer",
       "score": 0.92,
-      "projectName": "backend-refactor"
+      "projectName": "backend-refactor",
+      "relatedCode": [
+        {
+          "id": "code:src/cache/redis-client.ts:RedisCache",
+          "name": "RedisCache",
+          "summary": "Redis implementation discussed in this memory"
+        }
+      ]
     },
     {
       "id": "code:src-cache-redis-client-ts-RedisCache",
@@ -87,11 +100,26 @@ exploreRelationships, or getRelatedItems tools.
       "content": "export class RedisCache implements ICache...",
       "summary": "Redis cache implementation with automatic retry and connection pooling",
       "filePath": "src/cache/redis-client.ts",
-      "score": 0.87
+      "score": 0.87,
+      "keywords": {"cache": 5, "error": 2},
+      "patternSignals": {"has_classes": true, "has_error_handling": true},
+      "relatedMemories": [
+        {
+          "id": "memory:d6c77a29-19e5-467a-b394-6ead35c7dc4a",
+          "content": "We evaluated both options...",
+          "summary": "Team discussion about this implementation"
+        }
+      ]
     }
   ],
   "query": "why did we choose Redis for caching",
-  "totalResults": 15
+  "totalResults": 15,
+  "interpretation": {
+    "intent": "explore_topic",
+    "entities": ["Redis", "caching"],
+    "timeContext": "any",
+    "searchStrategies": ["semantic", "pattern", "code_linked", "keyword"]
+  }
 }
 
 ## Pro Tips

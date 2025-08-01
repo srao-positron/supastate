@@ -12833,3 +12833,10 @@ HTTP 52872: server socket close
 
  ✓ Starting...
  ✓ Ready in 1318ms
+ ✓ Compiled in 237ms (1750 modules)
+ ✓ Compiled in 156ms (1750 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+ ✓ Compiled in 178ms (1750 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from /Users/srao/supastate/.next/cache/webpack/client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+ ✓ Compiled in 250ms (1750 modules)
+ ✓ Compiled in 166ms (1750 modules)

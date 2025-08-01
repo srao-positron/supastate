@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { jwtVerify } from 'jose'
 import { TOOL_DESCRIPTIONS, getCapabilitiesDescription } from '@/lib/mcp/tool-descriptions'
+import { UnifiedSearchOrchestrator } from '@/lib/search/orchestrator'
+import { UnifiedSearchRequest } from '@/lib/search/types'
 
 // Ensure Redis is configured for MCP adapter
 const redisUrl = process.env.REDIS_URL || process.env.KV_URL
@@ -14,6 +16,15 @@ if (!redisUrl) {
   console.error('Redis URL not found. MCP adapter requires Redis for state management.')
 }
 
+// Helper function to infer type from Neo4j labels
+function inferTypeFromLabels(labels: string[]): string {
+  if (labels.includes('CodeEntity')) return 'code'
+  if (labels.includes('Memory')) return 'memory'
+  if (labels.includes('GitHubEntity')) return 'github'
+  return 'unknown'
+}
+
+// Helper function for direct embedding generation (used by searchCode and searchMemories)
 async function getEmbedding(text: string): Promise<number[]> {
   const openAIKey = process.env.OPENAI_API_KEY
   if (!openAIKey) {
@@ -46,13 +57,6 @@ async function getEmbedding(text: string): Promise<number[]> {
     console.error('Failed to generate embedding:', error)
     throw new Error('Failed to generate embedding')
   }
-}
-
-function inferTypeFromLabels(labels: string[]): string {
-  if (labels.includes('CodeEntity')) return 'code'
-  if (labels.includes('Memory')) return 'memory'
-  if (labels.includes('GitHubEntity')) return 'github'
-  return 'unknown'
 }
 
 // OAuth handler wrapper
@@ -217,173 +221,108 @@ async function handleMcpRequest(request: NextRequest) {
             throw new Error('Authentication required')
           }
           
-          // Initialize Neo4j for this request
-          const neo4jDriver = neo4j.driver(
-            process.env.NEO4J_URI!,
-            neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
-          )
-          
-          const session = neo4jDriver.session()
           try {
-            const ownershipFilter = getOwnershipFilter({
-              userId,
-              workspaceId,
-              nodeAlias: 'n',
-            })
-
-            let typeFilter = ''
-            if (params.types && params.types.length > 0) {
-              const labels = params.types.map(t => {
-                switch (t) {
-                  case 'code': return 'CodeEntity'
-                  case 'memory': return 'Memory'
-                  case 'github': return 'GitHubEntity'
-                  default: return ''
-                }
-              }).filter(Boolean)
-              
-              if (labels.length > 0) {
-                typeFilter = `AND (${labels.map(l => `n:${l}`).join(' OR ')})`
+            // Build unified search request
+            const searchRequest: UnifiedSearchRequest = {
+              query: params.query,
+              filters: params.types && params.types.length > 0 ? {
+                includeMemories: params.types.includes('memory'),
+                includeCode: params.types.includes('code')
+                // Note: github type is not currently supported by unified search
+              } : undefined,
+              pagination: {
+                limit: params.limit || 10
+              },
+              options: {
+                includeRelated: true,
+                groupBySession: false,
+                groupByFile: false
               }
             }
-
-            // Since Neo4j doesn't support multi-label vector indexes,
-            // we need to query each index separately and combine results
-            let cypherQuery = ''
             
-            if (!params.types || params.types.length === 0) {
-              // Query all types
-              cypherQuery = `
-                CALL {
-                  // Search memories directly
-                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
-                  YIELD node as m, score
-                  WHERE m:Memory AND ${ownershipFilter.replace(/n\./g, 'm.')}
-                  RETURN m as n, score, null as summary, m.created_at as createdAt
-                  
-                  UNION
-                  
-                  // Search code via EntitySummary
-                  CALL db.index.vector.queryNodes('entity_summary_embedding', toInteger($limit), $embedding)
-                  YIELD node as s, score
-                  WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
-                  MATCH (s)-[:SUMMARIZES]->(c:CodeEntity)
-                  WHERE ${ownershipFilter.replace(/n\./g, 'c.')}
-                  RETURN c as n, score, s.summary as summary, c.created_at as createdAt
-                }
-                WITH n, score, summary, createdAt
-                ORDER BY score DESC, createdAt DESC
-                LIMIT toInteger($limit)
-                RETURN 
-                  n.id as id,
-                  COALESCE(n.name, n.path, n.title) as name,
-                  n.type as type,
-                  n.content as content,
-                  COALESCE(summary, n.summary) as summary,
-                  n.file_path as filePath,
-                  n.project_name as projectName,
-                  labels(n) as labels,
-                  score
-              `
-            } else {
-              // Query specific types
-              const unionParts = []
-              if (params.types.includes('memory')) {
-                unionParts.push(`
-                  // Search memories directly
-                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
-                  YIELD node as n, score
-                  WHERE n:Memory AND ${ownershipFilter}
-                  RETURN n, score, null as summary
-                `)
-              }
-              if (params.types.includes('code')) {
-                unionParts.push(`
-                  // Search code via EntitySummary
-                  CALL db.index.vector.queryNodes('entity_summary_embedding', toInteger($limit), $embedding)
-                  YIELD node as s, score
-                  WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
-                  MATCH (s)-[:SUMMARIZES]->(n:CodeEntity)
-                  WHERE ${ownershipFilter}
-                  RETURN n, score, s.summary as summary
-                `)
-              }
-              
-              if (unionParts.length > 0) {
-                cypherQuery = `
-                  CALL {
-                    ${unionParts.join(' UNION ')}
-                  }
-                  WITH n, score, summary
-                  ORDER BY score DESC
-                  LIMIT toInteger($limit)
-                  RETURN 
-                    n.id as id,
-                    COALESCE(n.name, n.path, n.title) as name,
-                    n.type as type,
-                    n.content as content,
-                    COALESCE(summary, n.summary) as summary,
-                    n.file_path as filePath,
-                    n.project_name as projectName,
-                    labels(n) as labels,
-                    score
-                `
-              } else {
-                // No valid types, return empty
-                return {
-                  content: [{
-                    type: "text",
-                    text: JSON.stringify({
-                      results: [],
-                      query: params.query,
-                      totalResults: 0,
-                    }, null, 2),
-                  }],
-                }
-              }
-            }
-
-            const embedding = await getEmbedding(params.query)
-            const ownershipParams = getOwnershipParams({
+            // Build user context
+            const context = {
               userId,
               workspaceId,
-            })
-            const result = await session.run(cypherQuery, {
-              ...ownershipParams,
-              embedding,
-              limit: neo4j.int(params.limit || 10),
-            })
-
-            const results = result.records.map((record: any) => {
-              const type = inferTypeFromLabels(record.get('labels'))
-              const id = record.get('id')
-              return {
-                id: `${type}:${id}`, // Return full URI format
-                name: record.get('name'),
-                type,
-                content: record.get('content'),
-                summary: record.get('summary'),
-                filePath: record.get('filePath'),
-                projectName: record.get('projectName'),
-                score: record.get('score'),
+              teamId: workspaceId.startsWith('team:') ? workspaceId.replace('team:', '') : undefined
+            }
+            
+            console.log('[MCP Search] Using UnifiedSearchOrchestrator with context:', context)
+            console.log('[MCP Search] Query:', params.query)
+            
+            // Execute unified search
+            const orchestrator = new UnifiedSearchOrchestrator()
+            const searchResults = await orchestrator.search(searchRequest, context)
+            
+            console.log('[MCP Search] Results count:', searchResults.results?.length || 0)
+            console.log('[MCP Search] Strategies used:', searchResults.interpretation?.searchStrategies)
+            
+            // Transform results to match MCP format while preserving enhancements
+            const mcpResults = searchResults.results?.map(result => {
+              // Extract relationships data
+              const relatedMemories = result.relationships?.memories || []
+              const relatedCode = result.relationships?.code || []
+              
+              // For code results, extract EntitySummary data from the entity
+              let keywords = undefined
+              let patternSignals = undefined
+              if (result.type === 'code' && result.entity) {
+                // The entity might have summary data embedded
+                keywords = result.entity.keyword_frequencies
+                patternSignals = result.entity.pattern_signals
               }
-            })
-
+              
+              return {
+                id: `${result.type}:${result.id}`,
+                name: result.content.title,
+                type: result.type,
+                content: result.entity?.content,
+                summary: result.entity?.summary || result.content.snippet,
+                filePath: result.entity?.file_path || result.entity?.path,
+                projectName: result.metadata.project,
+                createdAt: result.entity?.created_at,
+                updatedAt: result.entity?.updated_at,
+                occurredAt: result.entity?.occurred_at,
+                sessionId: result.metadata.sessionId,
+                language: result.metadata.language,
+                metadata: result.entity?.metadata,
+                score: result.metadata.score,
+                // Include our enhancements
+                keywords,
+                patternSignals,
+                relatedMemories: result.type === 'code' ? relatedMemories : undefined,
+                relatedCode: result.type === 'memory' ? relatedCode : undefined,
+                sessionContext: result.type === 'memory' && result.entity?.session_id ? 
+                  searchResults.results?.filter(r => 
+                    r.type === 'memory' && 
+                    r.entity?.session_id === result.entity?.session_id &&
+                    r.id !== result.id
+                  ).map(r => ({
+                    id: r.id,
+                    chunkId: r.entity?.chunk_id,
+                    content: r.content.snippet.substring(0, 200),
+                    occurredAt: r.entity?.occurred_at
+                  })) : undefined
+              }
+            }) || []
+            
             return {
               content: [
                 {
                   type: "text",
                   text: JSON.stringify({
-                    results,
+                    results: mcpResults,
                     query: params.query,
-                    totalResults: results.length,
+                    totalResults: searchResults.pagination?.totalResults || mcpResults.length,
+                    interpretation: searchResults.interpretation,
+                    facets: searchResults.facets
                   }, null, 2),
                 },
               ],
             }
-          } finally {
-            await session.close()
-            await neo4jDriver.close()
+          } catch (error) {
+            console.error('[MCP Search] Error:', error)
+            throw error
           }
         }
       )
