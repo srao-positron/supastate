@@ -46,11 +46,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(authUrl)
   }
 
-  // We have a session! Return the Supabase JWT to the MCP client
-  // MCP expects the token as a query parameter in the redirect
+  // We have a session! Generate an authorization code
+  // OAuth2 expects an authorization code, not the token directly
+  const authCode = Buffer.from(JSON.stringify({
+    userId: session.user.id,
+    exp: Date.now() + 5 * 60 * 1000, // 5 minutes
+    sessionId: session.access_token.substring(0, 8), // For tracking
+  })).toString('base64url')
+  
   const callbackUrl = new URL(redirect_uri)
-  callbackUrl.searchParams.set('access_token', session.access_token)
-  callbackUrl.searchParams.set('token_type', 'Bearer')
+  callbackUrl.searchParams.set('code', authCode)
   if (state) callbackUrl.searchParams.set('state', state)
   
   return NextResponse.redirect(callbackUrl)

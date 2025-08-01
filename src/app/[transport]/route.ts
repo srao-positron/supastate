@@ -5,6 +5,7 @@ import neo4j from 'neo4j-driver'
 import { getOwnershipFilter } from '@/lib/neo4j/query-patterns'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { jwtVerify } from 'jose'
 
 // Ensure Redis is configured for MCP adapter
 const redisUrl = process.env.REDIS_URL || process.env.KV_URL
@@ -46,14 +47,15 @@ async function handleMcpRequest(request: NextRequest) {
     return new NextResponse(
       JSON.stringify({
         error: 'unauthorized',
-        error_description: 'Authentication required. Please authenticate via OAuth.',
-        auth_url: `${baseUrl}/api/mcp/auth`
+        error_description: `Authentication required. Please sign in at ${baseUrl}/auth/login and then get your access token from ${baseUrl}/dashboard/api-keys`,
+        authentication_url: `${baseUrl}/auth/login`
       }),
       {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer realm="${baseUrl}", as_uri="${baseUrl}/.well-known/oauth-protected-resource"`,
+          'WWW-Authenticate': `Bearer realm="${baseUrl}/mcp"`,
+          'Link': `<${baseUrl}/.well-known/oauth-authorization-server>; rel="authorization_server"`,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -70,36 +72,51 @@ async function handleMcpRequest(request: NextRequest) {
     const token = authHeader.slice(7)
     
     try {
-      // Validate Supabase JWT
-      const supabase = await createClient()
-      const { data: { user }, error } = await supabase.auth.getUser(token)
+      // First try to validate as our MCP token
+      const mcpTokenSecret = new TextEncoder().encode(
+        process.env.MCP_TOKEN_SECRET || 'mcp-token-secret-change-in-production'
+      )
       
-      if (error || !user) {
-        return new NextResponse(
-          JSON.stringify({
-            error: 'unauthorized',
-            error_description: 'Invalid or expired token'
-          }),
-          {
-            status: 401,
-            headers: {
-              'Content-Type': 'application/json',
-              'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Invalid or expired token"`,
-              'Access-Control-Allow-Origin': '*',
-            },
-          }
-        )
+      try {
+        const { payload } = await jwtVerify(token, mcpTokenSecret)
+        
+        // Extract user info from MCP token
+        userId = payload.sub as string
+        workspaceId = payload.workspace_id as string
+        
+      } catch (mcpError) {
+        // If MCP token validation fails, try Supabase token as fallback
+        // This allows both token types during transition
+        const supabase = await createClient()
+        const { data: { user }, error } = await supabase.auth.getUser(token)
+        
+        if (error || !user) {
+          return new NextResponse(
+            JSON.stringify({
+              error: 'unauthorized',
+              error_description: 'Invalid or expired token'
+            }),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Invalid or expired token"`,
+                'Access-Control-Allow-Origin': '*',
+              },
+            }
+          )
+        }
+        
+        // Get workspace info for Supabase token
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('id, team_id')
+          .eq('id', user.id)
+          .single()
+        
+        userId = user.id
+        workspaceId = userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${user.id}`
       }
-      
-      // Get workspace info
-      const { data: userRecord } = await supabase
-        .from('users')
-        .select('id, team_id')
-        .eq('id', user.id)
-        .single()
-      
-      userId = user.id
-      workspaceId = userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${user.id}`
     } catch (e) {
       console.error('Token validation error:', e)
       // If token validation fails, return 401
