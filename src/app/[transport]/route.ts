@@ -255,19 +255,19 @@ async function handleMcpRequest(request: NextRequest) {
               // Query all types
               cypherQuery = `
                 CALL {
-                  CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
+                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
                   YIELD node as n, score
                   WHERE ${ownershipFilter}
                   RETURN n, score
                   UNION
-                  CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
+                  CALL db.index.vector.queryNodes('code_embeddings', toInteger($limit), $embedding)
                   YIELD node as n, score
                   WHERE ${ownershipFilter}
                   RETURN n, score
                 }
                 WITH n, score
                 ORDER BY score DESC
-                LIMIT $limit
+                LIMIT toInteger($limit)
                 RETURN 
                   n.id as id,
                   n.name as name,
@@ -284,7 +284,7 @@ async function handleMcpRequest(request: NextRequest) {
               const unionParts = []
               if (params.types.includes('memory')) {
                 unionParts.push(`
-                  CALL db.index.vector.queryNodes('memory_embeddings', $limit, $embedding)
+                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
                   YIELD node as n, score
                   WHERE ${ownershipFilter}
                   RETURN n, score
@@ -292,7 +292,7 @@ async function handleMcpRequest(request: NextRequest) {
               }
               if (params.types.includes('code')) {
                 unionParts.push(`
-                  CALL db.index.vector.queryNodes('code_embeddings', $limit, $embedding)
+                  CALL db.index.vector.queryNodes('code_embeddings', toInteger($limit), $embedding)
                   YIELD node as n, score
                   WHERE ${ownershipFilter}
                   RETURN n, score
@@ -306,7 +306,7 @@ async function handleMcpRequest(request: NextRequest) {
                   }
                   WITH n, score
                   ORDER BY score DESC
-                  LIMIT $limit
+                  LIMIT toInteger($limit)
                   RETURN 
                     n.id as id,
                     n.name as name,
@@ -341,7 +341,7 @@ async function handleMcpRequest(request: NextRequest) {
             const result = await session.run(cypherQuery, {
               ...ownershipParams,
               embedding,
-              limit: params.limit || 10,
+              limit: neo4j.int(params.limit || 10),
             })
 
             const results = result.records.map((record: any) => ({
@@ -383,6 +383,7 @@ async function handleMcpRequest(request: NextRequest) {
           project: z.string().optional().describe('Filter by project name'),
           includeTests: z.boolean().optional().default(false).describe('Include test files in results'),
           includeImports: z.boolean().optional().default(true).describe('Include import relationships'),
+          limit: z.number().optional().default(20).describe('Maximum results to return (default: 20)'),
         },
         async (params) => {
           if (!userId || !workspaceId) {
@@ -414,12 +415,12 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const cypherQuery = `
-              CALL db.index.vector.queryNodes('code_embeddings', 30, $embedding)
+              CALL db.index.vector.queryNodes('code_embeddings', toInteger($limit) * 2, $embedding)
               YIELD node as c, score
               WHERE c:CodeEntity AND ${ownershipFilter} ${additionalFilters}
               WITH c, score
               ORDER BY score DESC
-              LIMIT 20
+              LIMIT toInteger($limit)
               RETURN 
                 c.id as id,
                 c.name as name,
@@ -442,6 +443,7 @@ async function handleMcpRequest(request: NextRequest) {
               embedding,
               language: params.language,
               project: params.project,
+              limit: neo4j.int(params.limit || 20),
             })
 
             const results = result.records.map((record: any) => ({
@@ -489,6 +491,7 @@ async function handleMcpRequest(request: NextRequest) {
             end: z.string().optional().describe('ISO date string for range end'),
           }).optional().describe('Filter results by date range'),
           projects: z.array(z.string()).optional().describe('Filter by project names'),
+          limit: z.number().optional().default(20).describe('Maximum results to return (default: 20)'),
         },
         async (params) => {
           if (!userId || !workspaceId) {
@@ -524,12 +527,12 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const cypherQuery = `
-              CALL db.index.vector.queryNodes('memory_embeddings', 30, $embedding)
+              CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit) * 2, $embedding)
               YIELD node as m, score
               WHERE m:Memory AND ${ownershipFilter} ${dateFilter} ${projectFilter}
               WITH m, score
               ORDER BY score DESC
-              LIMIT 20
+              LIMIT toInteger($limit)
               RETURN 
                 m.id as id,
                 m.session_id as sessionId,
@@ -553,6 +556,7 @@ async function handleMcpRequest(request: NextRequest) {
               startDate: params.dateRange?.start,
               endDate: params.dateRange?.end,
               projects: params.projects,
+              limit: neo4j.int(params.limit || 20),
             })
 
             const results = result.records.map((record: any) => ({
