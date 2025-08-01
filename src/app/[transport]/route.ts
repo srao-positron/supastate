@@ -254,26 +254,24 @@ async function handleMcpRequest(request: NextRequest) {
             if (!params.types || params.types.length === 0) {
               // Query all types
               cypherQuery = `
-                CALL {
-                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
-                  YIELD node as n, score
-                  WHERE ${ownershipFilter}
-                  RETURN n, score
-                  UNION
-                  CALL db.index.vector.queryNodes('code_embeddings', toInteger($limit), $embedding)
-                  YIELD node as n, score
-                  WHERE ${ownershipFilter}
-                  RETURN n, score
-                }
-                WITH n, score
+                // Search through EntitySummary nodes
+                CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit) * 2, $embedding)
+                YIELD node as s, score
+                WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
+                
+                // Get the actual entity
+                MATCH (s)-[:SUMMARIZES]->(n)
+                WHERE (n:Memory OR n:CodeEntity) AND ${ownershipFilter}
+                
+                WITH n, s, score
                 ORDER BY score DESC
                 LIMIT toInteger($limit)
                 RETURN 
                   n.id as id,
-                  n.name as name,
+                  COALESCE(n.name, n.path, n.title) as name,
                   n.type as type,
                   n.content as content,
-                  n.summary as summary,
+                  COALESCE(s.summary, n.summary) as summary,
                   n.file_path as filePath,
                   n.project_name as projectName,
                   labels(n) as labels,
@@ -284,18 +282,24 @@ async function handleMcpRequest(request: NextRequest) {
               const unionParts = []
               if (params.types.includes('memory')) {
                 unionParts.push(`
-                  CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
-                  YIELD node as n, score
+                  // Search EntitySummary for memories
+                  CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit), $embedding)
+                  YIELD node as s, score
+                  WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
+                  MATCH (s)-[:SUMMARIZES]->(n:Memory)
                   WHERE ${ownershipFilter}
-                  RETURN n, score
+                  RETURN n, s, score
                 `)
               }
               if (params.types.includes('code')) {
                 unionParts.push(`
-                  CALL db.index.vector.queryNodes('code_embeddings', toInteger($limit), $embedding)
-                  YIELD node as n, score
+                  // Search EntitySummary for code
+                  CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit), $embedding)
+                  YIELD node as s, score
+                  WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
+                  MATCH (s)-[:SUMMARIZES]->(n:CodeEntity)
                   WHERE ${ownershipFilter}
-                  RETURN n, score
+                  RETURN n, s, score
                 `)
               }
               
@@ -304,15 +308,15 @@ async function handleMcpRequest(request: NextRequest) {
                   CALL {
                     ${unionParts.join(' UNION ')}
                   }
-                  WITH n, score
+                  WITH n, s, score
                   ORDER BY score DESC
                   LIMIT toInteger($limit)
                   RETURN 
                     n.id as id,
-                    n.name as name,
+                    COALESCE(n.name, n.path, n.title) as name,
                     n.type as type,
                     n.content as content,
-                    n.summary as summary,
+                    COALESCE(s.summary, n.summary) as summary,
                     n.file_path as filePath,
                     n.project_name as projectName,
                     labels(n) as labels,
@@ -344,16 +348,20 @@ async function handleMcpRequest(request: NextRequest) {
               limit: neo4j.int(params.limit || 10),
             })
 
-            const results = result.records.map((record: any) => ({
-              id: record.get('id'),
-              name: record.get('name'),
-              type: inferTypeFromLabels(record.get('labels')),
-              content: record.get('content'),
-              summary: record.get('summary'),
-              filePath: record.get('filePath'),
-              projectName: record.get('projectName'),
-              score: record.get('score'),
-            }))
+            const results = result.records.map((record: any) => {
+              const type = inferTypeFromLabels(record.get('labels'))
+              const id = record.get('id')
+              return {
+                id: `${type}:${id}`, // Return full URI format
+                name: record.get('name'),
+                type,
+                content: record.get('content'),
+                summary: record.get('summary'),
+                filePath: record.get('filePath'),
+                projectName: record.get('projectName'),
+                score: record.get('score'),
+              }
+            })
 
             return {
               content: [
@@ -415,20 +423,26 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const cypherQuery = `
-              CALL db.index.vector.queryNodes('code_embeddings', toInteger($limit) * 2, $embedding)
-              YIELD node as c, score
-              WHERE c:CodeEntity AND ${ownershipFilter} ${additionalFilters}
-              WITH c, score
+              // Search through EntitySummary nodes (which have embeddings)
+              CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit) * 2, $embedding)
+              YIELD node as s, score
+              WHERE s:EntitySummary AND ${ownershipFilter.replace(/c\./g, 's.')}
+              
+              // Get the actual CodeEntity
+              MATCH (s)-[:SUMMARIZES]->(c:CodeEntity)
+              WHERE ${ownershipFilter} ${additionalFilters}
+              
+              WITH c, s, score
               ORDER BY score DESC
               LIMIT toInteger($limit)
               RETURN 
                 c.id as id,
-                c.name as name,
+                COALESCE(c.name, c.path) as name,
                 c.type as entityType,
                 c.file_path as filePath,
                 c.language as language,
                 c.content as content,
-                c.summary as summary,
+                COALESCE(s.summary, c.summary) as summary,
                 c.metadata as metadata,
                 score
             `
@@ -446,8 +460,11 @@ async function handleMcpRequest(request: NextRequest) {
               limit: neo4j.int(params.limit || 20),
             })
 
+            console.error('[searchCode] Query returned', result.records.length, 'results for query:', params.query)
+            console.error('[searchCode] Ownership params:', ownershipParams)
+
             const results = result.records.map((record: any) => ({
-              id: record.get('id'),
+              id: `code:${record.get('id')}`, // Return full URI format
               name: record.get('name'),
               type: record.get('entityType'),
               filePath: record.get('filePath'),
@@ -527,10 +544,16 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const cypherQuery = `
-              CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit) * 2, $embedding)
-              YIELD node as m, score
-              WHERE m:Memory AND ${ownershipFilter} ${dateFilter} ${projectFilter}
-              WITH m, score
+              // Search through EntitySummary nodes (which have embeddings)
+              CALL db.index.vector.queryNodes('entity_summary_embeddings', toInteger($limit) * 2, $embedding)
+              YIELD node as s, score
+              WHERE s:EntitySummary AND ${ownershipFilter.replace(/m\./g, 's.')}
+              
+              // Get the actual Memory
+              MATCH (s)-[:SUMMARIZES]->(m:Memory)
+              WHERE ${ownershipFilter} ${dateFilter} ${projectFilter}
+              
+              WITH m, s, score
               ORDER BY score DESC
               LIMIT toInteger($limit)
               RETURN 
@@ -538,7 +561,7 @@ async function handleMcpRequest(request: NextRequest) {
                 m.session_id as sessionId,
                 m.chunk_id as chunkId,
                 m.content as content,
-                m.summary as summary,
+                COALESCE(s.summary, m.summary) as summary,
                 m.occurred_at as occurredAt,
                 m.project_name as projectName,
                 m.metadata as metadata,
@@ -560,7 +583,7 @@ async function handleMcpRequest(request: NextRequest) {
             })
 
             const results = result.records.map((record: any) => ({
-              id: record.get('id'),
+              id: `memory:${record.get('id')}`, // Return full URI format
               sessionId: record.get('sessionId'),
               chunkId: record.get('chunkId'),
               content: record.get('content'),
@@ -614,8 +637,12 @@ async function handleMcpRequest(request: NextRequest) {
           
           const session = neo4jDriver.session()
           try {
-            const [entityType, ...idParts] = params.entityUri.split('://')
-            const entityId = idParts.join('://')
+            const colonIndex = params.entityUri.indexOf(':')
+            if (colonIndex === -1) {
+              throw new Error('Invalid URI format. Expected format: type:id (e.g., memory:uuid, code:uuid)')
+            }
+            const entityType = params.entityUri.substring(0, colonIndex)
+            const entityId = params.entityUri.substring(colonIndex + 1)
 
             const ownershipFilter = getOwnershipFilter({
               userId,
@@ -644,19 +671,31 @@ async function handleMcpRequest(request: NextRequest) {
                 break
             }
 
+            // Get separate ownership filters for start and end nodes
+            const startOwnershipFilter = getOwnershipFilter({
+              userId,
+              workspaceId,
+              nodeAlias: 'start',
+            })
+            const endOwnershipFilter = getOwnershipFilter({
+              userId,
+              workspaceId,
+              nodeAlias: 'end',
+            })
+
             const cypherQuery = `
               MATCH (start {id: $entityId})
-              WHERE ${ownershipFilter.replace('n.', 'start.')}
+              WHERE ${startOwnershipFilter}
               MATCH path = ${directionQuery}
-              WHERE ${ownershipFilter.replace('n.', 'end.')}
+              WHERE ${endOwnershipFilter}
                 AND length(path) <= $depth
               RETURN DISTINCT
                 start.id as startId,
-                start.name as startName,
+                COALESCE(start.name, start.path, start.id) as startName,
                 labels(start) as startLabels,
                 type(r) as relationshipType,
                 end.id as endId,
-                end.name as endName,
+                COALESCE(end.name, end.path, end.id) as endName,
                 labels(end) as endLabels,
                 length(path) as distance
               ORDER BY distance, relationshipType
@@ -732,8 +771,12 @@ async function handleMcpRequest(request: NextRequest) {
           
           const session = neo4jDriver.session()
           try {
-            const [entityType, ...idParts] = params.entityUri.split('://')
-            const entityId = idParts.join('://')
+            const colonIndex = params.entityUri.indexOf(':')
+            if (colonIndex === -1) {
+              throw new Error('Invalid URI format. Expected format: type:id (e.g., memory:uuid, code:uuid)')
+            }
+            const entityType = params.entityUri.substring(0, colonIndex)
+            const entityId = params.entityUri.substring(colonIndex + 1)
             
             const ownershipFilter = getOwnershipFilter({
               userId,
@@ -804,9 +847,11 @@ async function handleMcpRequest(request: NextRequest) {
             
             const relatedItems = relResult.records.map((record: any) => {
               const entity = record.get('fullEntity').properties
+              const type = inferTypeFromLabels([record.get('type')])
+              const id = record.get('id')
               return {
-                id: record.get('id'),
-                type: inferTypeFromLabels([record.get('type')]),
+                id: `${type}:${id}`, // Return full URI format
+                type,
                 relationship: record.get('relationship'),
                 direction: record.get('direction'),
                 title: record.get('title') || record.get('name') || record.get('filePath'),
@@ -824,82 +869,81 @@ async function handleMcpRequest(request: NextRequest) {
             // Get similar items if requested
             const similarItems: any[] = []
             if (params.includeSimilar) {
-              // First check if entity has embedding
-              const checkQuery = `
-                MATCH (n {id: $entityId})
+              // Use EntitySummary for similarity search
+              const simQuery = `
+                // Find the EntitySummary for this entity
+                OPTIONAL MATCH (summary:EntitySummary)-[:SUMMARIZES]->(n {id: $entityId})
                 WHERE ${ownershipFilter}
-                RETURN n.embedding IS NOT NULL as hasEmbedding, labels(n) as labels
+                
+                // Handle case where EntitySummary might not exist
+                WITH COALESCE(summary.embedding, n.embedding) as sourceEmbedding, n
+                WHERE sourceEmbedding IS NOT NULL
+                
+                // Find similar entities via EntitySummary embeddings
+                CALL db.index.vector.queryNodes('entity_summary_embeddings', 30, sourceEmbedding)
+                YIELD node as similar_summary, score
+                WHERE similar_summary.id <> COALESCE(summary.id, n.id)
+                  AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
+                  AND score >= $threshold
+                
+                // Get the actual entity
+                MATCH (similar_summary)-[:SUMMARIZES]->(similar_entity)
+                WHERE similar_entity:Memory OR similar_entity:CodeEntity
+                
+                // Apply type filter if specified
+                WITH similar_entity, similar_summary, score
+                WHERE 
+                  ($includeAllTypes = true) OR
+                  (similar_entity:Memory AND $includeMemory = true) OR
+                  (similar_entity:CodeEntity AND $includeCode = true)
+                
+                RETURN 
+                  similar_entity.id as id,
+                  labels(similar_entity)[0] as type,
+                  score,
+                  COALESCE(similar_entity.name, similar_entity.path, similar_entity.title) as name,
+                  similar_entity.title as title,
+                  similar_entity.file_path as filePath,
+                  similar_entity.project_name as projectName,
+                  substring(COALESCE(similar_entity.content, similar_summary.summary, ''), 0, 200) as snippet,
+                  similar_entity as fullEntity
+                ORDER BY score DESC
+                LIMIT 10
               `
               
-              const checkResult = await session.run(checkQuery, {
-                ...ownershipParams,
-                entityId
-              })
-              
-              if (checkResult.records.length > 0) {
-                const hasEmbedding = checkResult.records[0].get('hasEmbedding')
-                const labels = checkResult.records[0].get('labels')
+              try {
+                const simResult = await session.run(simQuery, {
+                  ...ownershipParams,
+                  entityId,
+                  threshold: params.similarityThreshold || 0.7,
+                  includeAllTypes: !params.types || params.types.length === 0,
+                  includeMemory: !params.types || params.types.includes('memory'),
+                  includeCode: !params.types || params.types.includes('code')
+                })
                 
-                if (hasEmbedding) {
-                  // Determine which indexes to search
-                  const indexesToSearch = []
-                  if (!params.types || params.types.length === 0) {
-                    indexesToSearch.push('memory_embeddings', 'code_embeddings')
-                  } else {
-                    if (params.types.includes('memory')) indexesToSearch.push('memory_embeddings')
-                    if (params.types.includes('code')) indexesToSearch.push('code_embeddings')
-                  }
-                  
-                  for (const indexName of indexesToSearch) {
-                    const simQuery = `
-                      MATCH (n {id: $entityId})
-                      WHERE ${ownershipFilter}
-                      CALL db.index.vector.queryNodes($indexName, 30, n.embedding)
-                      YIELD node as s, score
-                      WHERE s.id <> n.id 
-                        AND ${ownershipFilter.replace('n.', 's.')}
-                        AND score >= $threshold
-                      RETURN 
-                        s.id as id,
-                        labels(s)[0] as type,
-                        score,
-                        s.name as name,
-                        s.title as title,
-                        s.file_path as filePath,
-                        s.project_name as projectName,
-                        substring(COALESCE(s.content, s.summary, ''), 0, 200) as snippet,
-                        s as fullEntity
-                      ORDER BY score DESC
-                      LIMIT 10
-                    `
-                    
-                    const simResult = await session.run(simQuery, {
-                      ...ownershipParams,
-                      entityId,
-                      indexName,
-                      threshold: params.similarityThreshold || 0.7
-                    })
-                    
-                    simResult.records.forEach((record: any) => {
-                      const entity = record.get('fullEntity').properties
-                      similarItems.push({
-                        id: record.get('id'),
-                        type: inferTypeFromLabels([record.get('type')]),
-                        relationship: 'SIMILAR',
-                        similarity: record.get('score'),
-                        title: record.get('title') || record.get('name') || record.get('filePath'),
-                        snippet: record.get('snippet'),
-                        metadata: {
-                          reason: 'Semantic similarity',
-                          filePath: entity.file_path,
-                          language: entity.language,
-                          projectName: entity.project_name,
-                          occurredAt: entity.occurred_at,
-                        }
-                      })
-                    })
-                  }
-                }
+                simResult.records.forEach((record: any) => {
+                  const entity = record.get('fullEntity').properties
+                  const type = inferTypeFromLabels([record.get('type')])
+                  const id = record.get('id')
+                  similarItems.push({
+                    id: `${type}:${id}`, // Return full URI format
+                    type,
+                    relationship: 'SIMILAR',
+                    similarity: record.get('score'),
+                    title: record.get('title') || record.get('name') || record.get('filePath'),
+                    snippet: record.get('snippet'),
+                    metadata: {
+                      reason: 'Semantic similarity',
+                      filePath: entity.file_path,
+                      language: entity.language,
+                      projectName: entity.project_name,
+                      occurredAt: entity.occurred_at,
+                    }
+                  })
+                })
+              } catch (simError) {
+                console.error('Similar items search failed:', simError)
+                // Continue without similar results
               }
             }
             
@@ -971,8 +1015,18 @@ async function handleMcpRequest(request: NextRequest) {
           
           const session = neo4jDriver.session()
           try {
-            const [entityType, ...idParts] = params.uri.split('://')
-            const entityId = idParts.join('://')
+            // Handle both full URI format and just ID
+            let entityId = params.uri
+            let entityType = 'unknown'
+            
+            const colonIndex = params.uri.indexOf(':')
+            if (colonIndex !== -1) {
+              // Full URI format provided
+              entityType = params.uri.substring(0, colonIndex)
+              entityId = params.uri.substring(colonIndex + 1)
+            }
+            
+            // If no type prefix, we'll search for the entity in both Memory and CodeEntity
 
             const ownershipFilter = getOwnershipFilter({
               userId,
@@ -980,9 +1034,15 @@ async function handleMcpRequest(request: NextRequest) {
               nodeAlias: 'n',
             })
 
-            // Get entity details
-            const entityQuery = `
-              MATCH (n {id: $entityId})
+            // Get entity details - search in both Memory and CodeEntity if type unknown
+            const entityQuery = entityType === 'unknown' ? `
+              MATCH (n)
+              WHERE n.id = $entityId 
+                AND (n:Memory OR n:CodeEntity OR n:Pattern)
+                AND ${ownershipFilter}
+              RETURN n, labels(n) as labels
+            ` : `
+              MATCH (n:${entityType === 'memory' ? 'Memory' : entityType === 'code' ? 'CodeEntity' : 'Pattern'} {id: $entityId})
               WHERE ${ownershipFilter}
               RETURN n, labels(n) as labels
             `
@@ -1001,7 +1061,12 @@ async function handleMcpRequest(request: NextRequest) {
             }
 
             const entityRecord = entityResult.records[0]
-            const entity = entityRecord.get('n').properties
+            const entityNode = entityRecord.get('n')
+            if (!entityNode || !entityNode.properties) {
+              console.error('Entity node or properties missing:', entityNode)
+              throw new Error('Invalid entity data structure')
+            }
+            const entity = entityNode.properties
             const labels = entityRecord.get('labels')
 
             let relationships: any[] = []
@@ -1021,45 +1086,65 @@ async function handleMcpRequest(request: NextRequest) {
                 ...ownershipParams,
                 entityId
               })
-              relationships = relResult.records.map((record: any) => ({
-                type: record.get('type'),
-                direction: record.get('isOutgoing') ? 'outgoing' : 'incoming',
-                target: {
-                  id: record.get('targetId'),
-                  name: record.get('targetName'),
-                  type: inferTypeFromLabels(record.get('targetLabels')),
-                },
-              }))
+              relationships = relResult.records.map((record: any) => {
+                const targetType = inferTypeFromLabels(record.get('targetLabels'))
+                const targetId = record.get('targetId')
+                return {
+                  type: record.get('type'),
+                  direction: record.get('isOutgoing') ? 'outgoing' : 'incoming',
+                  target: {
+                    id: `${targetType}:${targetId}`, // Return full URI format
+                    name: record.get('targetName'),
+                    type: targetType,
+                  },
+                }
+              })
             }
 
             let similar: any[] = []
-            if (params.includeSimilar && entity.embedding) {
-              const indexName = labels.includes('CodeEntity') ? 'code_embeddings' : 
-                               labels.includes('Memory') ? 'memory_embeddings' : 
-                               null
-              
-              if (indexName) {
-                const similarQuery = `
-                  MATCH (n {id: $entityId})
-                  WHERE ${ownershipFilter}
-                  CALL db.index.vector.queryNodes($indexName, 10, n.embedding)
-                  YIELD node as s, score
-                  WHERE s.id <> n.id AND ${ownershipFilter.replace('n.', 's.')}
-                  RETURN s.id as id, s.name as name, labels(s) as labels, score
-                  LIMIT 5
-                `
+            if (params.includeSimilar) {
+              // Use EntitySummary for similarity search
+              const similarQuery = `
+                // Find the EntitySummary for this entity
+                MATCH (s:EntitySummary)-[:SUMMARIZES]->(n {id: $entityId})
+                WHERE ${ownershipFilter}
+                
+                // Find similar entities via EntitySummary embeddings
+                CALL db.index.vector.queryNodes('entity_summary_embeddings', 10, s.embedding)
+                YIELD node as similar_summary, score
+                WHERE similar_summary.id <> s.id 
+                  AND ${ownershipFilter.replace(/n\./g, 'similar_summary.')}
+                
+                // Get the actual entity
+                MATCH (similar_summary)-[:SUMMARIZES]->(similar_entity)
+                WHERE similar_entity:Memory OR similar_entity:CodeEntity
+                
+                RETURN 
+                  similar_entity.id as id, 
+                  COALESCE(similar_entity.name, similar_entity.path, similar_entity.title) as name, 
+                  labels(similar_entity) as labels, 
+                  score
+                LIMIT 5
+              `
 
+              try {
                 const simResult = await session.run(similarQuery, {
                   ...ownershipParams,
-                  entityId,
-                  indexName
+                  entityId
                 })
-                similar = simResult.records.map((record: any) => ({
-                  id: record.get('id'),
-                  name: record.get('name'),
-                  type: inferTypeFromLabels(record.get('labels')),
-                  similarity: record.get('score'),
-                }))
+                similar = simResult.records.map((record: any) => {
+                  const similarType = inferTypeFromLabels(record.get('labels'))
+                  const similarId = record.get('id')
+                  return {
+                    id: `${similarType}:${similarId}`, // Return full URI format
+                    name: record.get('name'),
+                    type: similarType,
+                    similarity: record.get('score'),
+                  }
+                })
+              } catch (simError) {
+                console.error('Similar entity search failed:', simError)
+                // Continue without similar results
               }
             }
 
@@ -1071,14 +1156,18 @@ async function handleMcpRequest(request: NextRequest) {
               delete cleanEntity.content
             }
 
+            const inferredType = inferTypeFromLabels(labels)
+            const fullUri = colonIndex === -1 ? `${inferredType}:${entityId}` : params.uri
+            
             return {
               content: [
                 {
                   type: "text",
                   text: JSON.stringify({
-                    uri: params.uri,
-                    type: inferTypeFromLabels(labels),
+                    uri: fullUri,
+                    type: inferredType,
                     entity: {
+                      id: fullUri,
                       ...cleanEntity,
                       hasEmbedding: !!embedding,
                     },

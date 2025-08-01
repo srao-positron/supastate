@@ -54,11 +54,20 @@ Expected results:
 - Code: Redis client implementation, cache utilities
 - GitHub: PRs introducing Redis integration
 
+## URI Format
+All entities in Supastate use a simple URI format: \`type:id\`
+- **Memory**: \`memory:d6c77a29-19e5-467a-b394-6ead35c7dc4a\`
+- **Code**: \`code:src/auth/validateToken:validateToken\`
+- **Pattern**: \`pattern:pat_123abc\`
+
+The \`id\` field in all search results contains the full URI, ready to use with inspectEntity, 
+exploreRelationships, or getRelatedItems tools.
+
 ## Response Format
 {
   "results": [
     {
-      "id": "memory:2024-01-15:chunk-42",
+      "id": "memory:d6c77a29-19e5-467a-b394-6ead35c7dc4a",
       "name": "Discussion about Redis vs Memcached",
       "type": "memory",
       "content": "We evaluated both options...",
@@ -67,7 +76,7 @@ Expected results:
       "projectName": "backend-refactor"
     },
     {
-      "id": "code:src/cache/redis-client.ts:RedisCache",
+      "id": "code:src-cache-redis-client-ts-RedisCache",
       "name": "RedisCache",
       "type": "code",
       "content": "export class RedisCache implements ICache...",
