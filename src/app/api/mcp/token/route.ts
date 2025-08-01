@@ -50,11 +50,30 @@ export async function POST(request: NextRequest) {
       // Decode the authorization code
       let codeData: any
       try {
-        codeData = JSON.parse(Buffer.from(code, 'base64url').toString())
+        // Handle our short authorization codes (ac_xxxxx format)
+        if (code.startsWith('ac_')) {
+          const encoded = code.substring(3) // Remove 'ac_' prefix
+          // Pad the base64 string if needed
+          const padded = encoded + '='.repeat((4 - encoded.length % 4) % 4)
+          const decoded = Buffer.from(padded, 'base64url').toString()
+          codeData = JSON.parse(decoded)
+          
+          // Map short keys back to full keys
+          codeData = {
+            userId: codeData.u,
+            email: codeData.e,
+            timestamp: codeData.t,
+            exp: codeData.t + 5 * 60 * 1000 // 5 minutes from creation
+          }
+        } else {
+          // Fallback for old format (shouldn't happen with new codes)
+          codeData = JSON.parse(Buffer.from(code, 'base64url').toString())
+        }
       } catch (e) {
+        console.error('[MCP Debug] Failed to decode authorization code:', e)
         return NextResponse.json({ 
           error: 'invalid_grant',
-          error_description: 'Invalid authorization code' 
+          error_description: 'Invalid authorization code format' 
         }, { status: 400 })
       }
 

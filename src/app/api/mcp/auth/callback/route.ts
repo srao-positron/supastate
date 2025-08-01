@@ -49,13 +49,17 @@ export async function GET(request: NextRequest) {
   }
 
   // We have an authenticated user! Generate an authorization code
-  // OAuth2 expects an authorization code, not the token directly
-  const authCode = Buffer.from(JSON.stringify({
-    userId: user.id,
-    email: user.email,
-    exp: Date.now() + 5 * 60 * 1000, // 5 minutes
-    timestamp: Date.now(),
-  })).toString('base64url')
+  // OAuth2 expects a short, opaque authorization code like Stripe's
+  // We'll store the actual user data in memory/Redis and just send a reference
+  const authCodeId = `mcp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  
+  // Store the actual user data that we'll exchange for a token later
+  // For now, we'll encode it in the code but make it shorter
+  const authCode = `ac_${Buffer.from(JSON.stringify({
+    u: user.id,
+    e: user.email,
+    t: Date.now(),
+  })).toString('base64url').substring(0, 30)}`
   
   // Log what we're sending back to Claude
   console.error('[MCP Debug] Sending authorization code back to Claude:', {
@@ -90,7 +94,7 @@ export async function GET(request: NextRequest) {
   console.error('[MCP Debug] FINAL REDIRECT TO CLAUDE:')
   console.error('[MCP Debug] Full URL:', callbackUrl.toString())
   console.error('[MCP Debug] Parameters:')
-  console.error('[MCP Debug]   - code:', authCode.substring(0, 50) + '...')
+  console.error('[MCP Debug]   - code:', authCode)
   console.error('[MCP Debug]   - state:', state)
   console.error('[MCP Debug]   - user_id:', user.id)
   console.error('[MCP Debug]   - workspace_id:', userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${user.id}`)
