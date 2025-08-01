@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { SignJWT, jwtVerify } from 'jose'
 import { getAuthCode } from '@/lib/mcp/auth-codes'
 
@@ -65,14 +66,25 @@ export async function POST(request: NextRequest) {
       })
 
       // Get user data from Supabase using the stored user ID
-      const supabase = await createClient()
-      const { data: userRecord } = await supabase
+      // Use service client since we don't have auth context in token exchange
+      const supabase = createServiceClient()
+      console.error('[MCP Debug] Querying users table for userId:', codeData.userId)
+      
+      const { data: userRecord, error: userError } = await supabase
         .from('users')
         .select('id, team_id, email')
         .eq('id', codeData.userId)
         .single()
       
-      if (!userRecord) {
+      console.error('[MCP Debug] User query result:', {
+        hasUser: !!userRecord,
+        error: userError?.message || 'none',
+        userId: userRecord?.id,
+        hasTeamId: !!userRecord?.team_id
+      })
+      
+      if (!userRecord || userError) {
+        console.error('[MCP Debug] User lookup failed:', userError)
         return NextResponse.json({ 
           error: 'invalid_grant',
           error_description: 'User not found' 
@@ -138,7 +150,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Get fresh user data from Supabase
-        const supabase = await createClient()
+        // Use service client since we don't have auth context in token exchange
+        const supabase = createServiceClient()
         const { data: userRecord } = await supabase
           .from('users')
           .select('id, team_id, email')
