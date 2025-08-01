@@ -217,9 +217,11 @@ npx supabase gen types typescript --local > src/types/supabase.ts
 - Database migration not tested
 - Pushing without running build first
 
-## Memory Integration (Future)
+## Memory Integration
 
-When Camille memory tools are available, follow these patterns:
+When searching for historical context, use either Camille or Supastate MCP tools (whichever is available):
+- **Camille**: Use `recall_previous_discussions` for conversation history
+- **Supastate**: Use `search`, `searchMemories`, or `searchCode` for memories and code
 - Search for related past work before implementing
 - Check for previous bug fixes
 - Look for architectural decisions

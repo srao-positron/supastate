@@ -13,6 +13,11 @@ This is your primary discovery tool for finding any information stored in Supast
 semantic search powered by OpenAI embeddings to find conceptually related content across all 
 entity types. Unlike keyword search, it understands meaning and context.
 
+**IMPORTANT**: Supastate is a KNOWLEDGE GRAPH where memories, code, and GitHub entities are 
+richly interconnected. Results now include contextual relationships - always examine the 
+\`relatedMemories\` and \`relatedCode\` fields to understand the full context. Results are 
+sorted by relevance AND recency to show the most recent relevant items first.
+
 ## When to Use This Tool
 1. **Initial exploration** - Start here when you need to understand any topic
 2. **Cross-cutting concerns** - Find how a concept appears across code AND conversations
@@ -92,10 +97,13 @@ exploreRelationships, or getRelatedItems tools.
 ## Pro Tips
 - Use natural language, not keywords (e.g., "how do we handle user sessions" not "session handler")
 - Include context in queries for better results ("React component for user profile" vs just "profile")
-- Results are sorted by relevance score (0-1, higher is better)
+- Results are sorted by relevance score AND recency - newest relevant content appears first
 - Check scores - below 0.7 might be less relevant
 - Combine multiple concepts with "and" for refined results
-- Use the type filter only when you specifically need one kind of entity`,
+- Use the type filter only when you specifically need one kind of entity
+- **ALWAYS follow the graph**: Use the related entities in results to explore connected content
+- Memory results include \`relatedCode\` showing what code was discussed
+- Code results include \`relatedMemories\` showing conversations about that code`,
   },
 
   searchCode: {
@@ -106,6 +114,12 @@ exploreRelationships, or getRelatedItems tools.
 Specialized code search that understands programming concepts, design patterns, and language-specific 
 idioms. Goes beyond text matching to find functionally similar code even with different implementations.
 Ideal for finding examples, understanding patterns, and locating specific functionality.
+
+**NEW FEATURES**:
+- Results include full EntitySummary data with keywords and pattern signals
+- Each code result shows related memories discussing that code
+- Results sorted by relevance AND recency
+- Rich metadata helps understand code purpose and usage
 
 ## When to Use This Tool
 1. **Finding implementations** - Locate where specific functionality is coded
@@ -174,6 +188,24 @@ Expected results:
         "imports": ["express", "user.service", "validation"],
         "methods": ["createUser", "getUser", "updateUser", "deleteUser"]
       },
+      "keywords": {
+        "error": 5,
+        "test": 2,
+        "security": 3
+      },
+      "patternSignals": {
+        "has_classes": true,
+        "has_api_calls": true,
+        "is_test_file": false
+      },
+      "relatedMemories": [
+        {
+          "id": "memory:2024-01-10:session-99:chunk-3",
+          "content": "We discussed adding rate limiting to the user controller...",
+          "summary": "Team discussion about API security improvements",
+          "occurredAt": "2024-01-10T15:30:00Z"
+        }
+      ],
       "score": 0.89
     }
   ],
@@ -192,7 +224,11 @@ Expected results:
 - Set includeTests=true to find usage examples
 - Project filter helps in monorepos
 - Higher scores (>0.8) indicate very relevant matches
-- Check the metadata for quick overview of exports/imports`,
+- Check the metadata for quick overview of exports/imports
+- **FOLLOW THE GRAPH**: Each code result includes memories discussing it - explore these for context
+- Check \`keywords\` to understand code focus areas (error handling, testing, etc.)
+- Use \`patternSignals\` to quickly identify code characteristics
+- Results are sorted by relevance AND recency to show newest matches first`,
   },
 
   searchMemories: {
@@ -204,6 +240,11 @@ Access the team's collective memory of all development conversations, architectu
 debugging sessions, and planning discussions. This tool searches through conversation chunks 
 that have been automatically summarized and indexed, helping you understand the "why" behind 
 code and decisions.
+
+**GRAPH CONTEXT**: Each memory result now includes:
+- \`relatedCode\`: Code entities discussed in the conversation
+- \`sessionContext\`: Adjacent memory chunks from the same session
+- Results sorted by relevance AND recency to show newest discussions first
 
 ## When to Use This Tool
 1. **Understanding decisions** - Why was something built a certain way?
@@ -272,6 +313,23 @@ Expected results:
         "topics": ["memory-leak", "event-listeners", "performance"],
         "outcome": "identified-fix"
       },
+      "relatedCode": [
+        {
+          "id": "code:src/utils/event-manager.ts:EventManager",
+          "name": "EventManager",
+          "type": "class",
+          "filePath": "src/utils/event-manager.ts",
+          "summary": "Event management utility with listener cleanup"
+        }
+      ],
+      "sessionContext": [
+        {
+          "id": "memory:2024-01-15:session-123:chunk-4",
+          "chunkId": "chunk-4",
+          "content": "John suggested we implement automatic cleanup...",
+          "occurredAt": "2024-01-15T14:25:00Z"
+        }
+      ],
       "score": 0.91
     }
   ],
@@ -290,7 +348,10 @@ Expected results:
 - Check metadata for participants and outcomes
 - Session IDs group related conversations
 - Chunk IDs maintain conversation continuity
-- Follow up with related chunks to get full context`,
+- **FOLLOW THE GRAPH**: Always check \`relatedCode\` to see what code was discussed
+- Use \`sessionContext\` to understand the full conversation flow
+- Results are sorted by relevance AND recency - newest discussions appear first
+- Navigate from memories to code to see how discussions became implementations`,
   },
 
   exploreRelationships: {

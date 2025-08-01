@@ -12817,3 +12817,19 @@ HTTP 52872: server socket close
  ✓ Compiled in 579ms (3867 modules)
  ✓ Compiled in 441ms (3867 modules)
  ✓ Compiled in 140ms (1750 modules)
+ ✓ Compiled in 322ms (1750 modules)
+ ✓ Compiled in 259ms (1750 modules)
+ ✓ Compiled in 273ms (1750 modules)
+ ✓ Compiled in 152ms (1750 modules)
+ ✓ Compiled in 143ms (1750 modules)
+ ✓ Compiled in 247ms (1750 modules)
+ ✓ Compiled in 145ms (1750 modules)
+ ✓ Compiled in 143ms (1750 modules)
+ ✓ Compiled in 254ms (1750 modules)
+ ✓ Compiled in 159ms (1750 modules)
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3001
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1318ms

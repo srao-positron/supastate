@@ -403,7 +403,8 @@ serve(async (req) => {
                   })
                   SET f.async = $async,
                       f.generator = $generator,
-                      f.params = $params
+                      f.params = $params,
+                      f.returnType = $returnType
                   MERGE (c)-[:DEFINES_FUNCTION]->(f)
                   `,
                   {
@@ -412,7 +413,8 @@ serve(async (req) => {
                     name: func.name,
                     async: func.async || false,
                     generator: func.generator || false,
-                    params: func.params || []
+                    params: JSON.stringify(func.params || []),
+                    returnType: func.returnType || null
                   }
                 )
               }
@@ -438,7 +440,7 @@ serve(async (req) => {
                     workspace_id: workspace_id || `user:${user_id}`,
                     name: cls.name,
                     extends: cls.extends || null,
-                    methods: cls.methods || []
+                    methods: JSON.stringify(cls.methods || [])
                   }
                 )
               }

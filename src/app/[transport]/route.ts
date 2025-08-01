@@ -259,7 +259,7 @@ async function handleMcpRequest(request: NextRequest) {
                   CALL db.index.vector.queryNodes('memory_embeddings', toInteger($limit), $embedding)
                   YIELD node as m, score
                   WHERE m:Memory AND ${ownershipFilter.replace(/n\./g, 'm.')}
-                  RETURN m as n, score, null as summary
+                  RETURN m as n, score, null as summary, m.created_at as createdAt
                   
                   UNION
                   
@@ -269,10 +269,10 @@ async function handleMcpRequest(request: NextRequest) {
                   WHERE s:EntitySummary AND ${ownershipFilter.replace(/n\./g, 's.')}
                   MATCH (s)-[:SUMMARIZES]->(c:CodeEntity)
                   WHERE ${ownershipFilter.replace(/n\./g, 'c.')}
-                  RETURN c as n, score, s.summary as summary
+                  RETURN c as n, score, s.summary as summary, c.created_at as createdAt
                 }
-                WITH n, score, summary
-                ORDER BY score DESC
+                WITH n, score, summary, createdAt
+                ORDER BY score DESC, createdAt DESC
                 LIMIT toInteger($limit)
                 RETURN 
                   n.id as id,
@@ -411,7 +411,14 @@ async function handleMcpRequest(request: NextRequest) {
           
           const session = neo4jDriver.session()
           try {
-            const ownershipFilter = getOwnershipFilter({
+            // Create separate ownership filters for each node type
+            const summaryOwnershipFilter = getOwnershipFilter({
+              userId,
+              workspaceId,
+              nodeAlias: 's',
+            })
+            
+            const codeOwnershipFilter = getOwnershipFilter({
               userId,
               workspaceId,
               nodeAlias: 'c',
@@ -432,15 +439,26 @@ async function handleMcpRequest(request: NextRequest) {
               // Search through EntitySummary nodes (which have embeddings)
               CALL db.index.vector.queryNodes('entity_summary_embedding', toInteger($limit) * 2, $embedding)
               YIELD node as s, score
-              WHERE s:EntitySummary AND ${ownershipFilter.replace(/c\./g, 's.')}
+              WHERE s:EntitySummary AND ${summaryOwnershipFilter}
               
               // Get the actual CodeEntity
               MATCH (s)-[:SUMMARIZES]->(c:CodeEntity)
-              WHERE ${ownershipFilter} ${additionalFilters}
+              WHERE ${codeOwnershipFilter} ${additionalFilters}
               
               WITH c, s, score
-              ORDER BY score DESC
+              ORDER BY score DESC, c.updated_at DESC, c.created_at DESC
               LIMIT toInteger($limit)
+              
+              // Get related memories that discuss this code
+              OPTIONAL MATCH (m:Memory)-[:REFERENCES]->(c)
+              WHERE ${getOwnershipFilter({ userId, workspaceId, nodeAlias: 'm' })}
+              WITH c, s, score, collect(DISTINCT {
+                id: m.id,
+                content: substring(m.content, 0, 200),
+                summary: m.summary,
+                occurredAt: m.occurred_at
+              }) as relatedMemories
+              
               RETURN 
                 c.id as id,
                 COALESCE(c.name, c.path) as name,
@@ -450,6 +468,11 @@ async function handleMcpRequest(request: NextRequest) {
                 c.content as content,
                 COALESCE(s.summary, c.summary) as summary,
                 c.metadata as metadata,
+                c.created_at as createdAt,
+                c.updated_at as updatedAt,
+                s.keyword_frequencies as keywords,
+                s.pattern_signals as patternSignals,
+                relatedMemories,
                 score
             `
 
@@ -478,6 +501,11 @@ async function handleMcpRequest(request: NextRequest) {
               content: record.get('content'),
               summary: record.get('summary'),
               metadata: record.get('metadata'),
+              createdAt: record.get('createdAt'),
+              updatedAt: record.get('updatedAt'),
+              keywords: record.get('keywords'),
+              patternSignals: record.get('patternSignals'),
+              relatedMemories: record.get('relatedMemories'),
               score: record.get('score'),
             }))
 
@@ -555,8 +583,33 @@ async function handleMcpRequest(request: NextRequest) {
               YIELD node as m, score
               WHERE m:Memory AND ${ownershipFilter} ${dateFilter} ${projectFilter}
               WITH m, score
-              ORDER BY score DESC
+              ORDER BY score DESC, m.occurred_at DESC, m.created_at DESC
               LIMIT toInteger($limit)
+              
+              // Get related code entities that this memory discusses
+              OPTIONAL MATCH (m)-[:REFERENCES]->(c:CodeEntity)
+              WHERE ${getOwnershipFilter({ userId, workspaceId, nodeAlias: 'c' })}
+              WITH m, score, collect(DISTINCT {
+                id: c.id,
+                name: COALESCE(c.name, c.path),
+                type: c.type,
+                filePath: c.file_path,
+                language: c.language,
+                summary: c.summary
+              }) as relatedCode
+              
+              // Get adjacent memory chunks from the same session for context
+              OPTIONAL MATCH (adjacentMemory:Memory)
+              WHERE adjacentMemory.session_id = m.session_id 
+                AND adjacentMemory.id <> m.id
+                AND ${getOwnershipFilter({ userId, workspaceId, nodeAlias: 'adjacentMemory' })}
+              WITH m, score, relatedCode, collect(DISTINCT {
+                id: adjacentMemory.id,
+                chunkId: adjacentMemory.chunk_id,
+                content: substring(adjacentMemory.content, 0, 200),
+                occurredAt: adjacentMemory.occurred_at
+              }) as sessionContext
+              
               RETURN 
                 m.id as id,
                 m.session_id as sessionId,
@@ -564,8 +617,11 @@ async function handleMcpRequest(request: NextRequest) {
                 m.content as content,
                 m.summary as summary,
                 m.occurred_at as occurredAt,
+                m.created_at as createdAt,
                 m.project_name as projectName,
                 m.metadata as metadata,
+                relatedCode,
+                sessionContext,
                 score
             `
 
@@ -590,8 +646,11 @@ async function handleMcpRequest(request: NextRequest) {
               content: record.get('content'),
               summary: record.get('summary'),
               occurredAt: record.get('occurredAt'),
+              createdAt: record.get('createdAt'),
               projectName: record.get('projectName'),
               metadata: record.get('metadata'),
+              relatedCode: record.get('relatedCode'),
+              sessionContext: record.get('sessionContext'),
               score: record.get('score'),
             }))
 
