@@ -705,6 +705,248 @@ async function handleMcpRequest(request: NextRequest) {
       )
 
       server.tool(
+        TOOL_DESCRIPTIONS.getRelatedItems.name,
+        TOOL_DESCRIPTIONS.getRelatedItems.description,
+        {
+          entityUri: z.string().describe('Entity URI to find related items for'),
+          types: z.array(z.enum(['code', 'memory', 'pattern'])).optional().describe('Filter by entity types'),
+          relationshipTypes: z.array(z.string()).optional().describe('Filter by specific relationship types'),
+          includeSimilar: z.boolean().optional().default(true).describe('Include semantically similar items'),
+          similarityThreshold: z.number().min(0).max(1).optional().default(0.7).describe('Minimum similarity score'),
+          limit: z.number().optional().default(20).describe('Maximum results to return'),
+          cursor: z.string().optional().describe('Pagination cursor from previous response'),
+        },
+        async (params) => {
+          if (!userId || !workspaceId) {
+            throw new Error('Authentication required')
+          }
+          
+          const neo4jDriver = neo4j.driver(
+            process.env.NEO4J_URI!,
+            neo4j.auth.basic(process.env.NEO4J_USER!, process.env.NEO4J_PASSWORD!)
+          )
+          
+          const session = neo4jDriver.session()
+          try {
+            const [entityType, ...idParts] = params.entityUri.split('://')
+            const entityId = idParts.join('://')
+            
+            const ownershipFilter = getOwnershipFilter({
+              userId,
+              workspaceId,
+              nodeAlias: 'n',
+            })
+            
+            // Parse cursor for pagination
+            const offset = params.cursor ? 
+              JSON.parse(Buffer.from(params.cursor, 'base64').toString()).offset : 0
+            
+            // Build type filter
+            let typeFilter = ''
+            if (params.types && params.types.length > 0) {
+              const labels = params.types.map(t => {
+                switch (t) {
+                  case 'code': return 'CodeEntity'
+                  case 'memory': return 'Memory'
+                  case 'pattern': return 'Pattern'
+                  default: return ''
+                }
+              }).filter(Boolean)
+              typeFilter = `AND (${labels.map(l => `related:${l}`).join(' OR ')})`
+            }
+            
+            // Build relationship filter
+            let relFilter = ''
+            if (params.relationshipTypes && params.relationshipTypes.length > 0) {
+              relFilter = `AND type(r) IN $relationshipTypes`
+            }
+            
+            // Get direct relationships
+            const relQuery = `
+              MATCH (n {id: $entityId})
+              WHERE ${ownershipFilter}
+              MATCH (n)-[r]-(related)
+              WHERE ${ownershipFilter.replace('n.', 'related.')} ${typeFilter} ${relFilter}
+              WITH type(r) as relType, related, 
+                   CASE WHEN startNode(r).id = n.id THEN 'outgoing' ELSE 'incoming' END as direction
+              RETURN 
+                related.id as id,
+                labels(related)[0] as type,
+                relType as relationship,
+                direction,
+                related.name as name,
+                related.title as title,
+                related.file_path as filePath,
+                related.project_name as projectName,
+                substring(COALESCE(related.content, related.summary, ''), 0, 200) as snippet,
+                related as fullEntity
+              ORDER BY relType, related.created_at DESC
+              SKIP $offset
+              LIMIT $limit
+            `
+            
+            const ownershipParams = getOwnershipParams({
+              userId,
+              workspaceId,
+            })
+            
+            const relResult = await session.run(relQuery, {
+              ...ownershipParams,
+              entityId,
+              relationshipTypes: params.relationshipTypes,
+              offset: neo4j.int(offset),
+              limit: neo4j.int(params.limit || 20),
+            })
+            
+            const relatedItems = relResult.records.map((record: any) => {
+              const entity = record.get('fullEntity').properties
+              return {
+                id: record.get('id'),
+                type: inferTypeFromLabels([record.get('type')]),
+                relationship: record.get('relationship'),
+                direction: record.get('direction'),
+                title: record.get('title') || record.get('name') || record.get('filePath'),
+                snippet: record.get('snippet'),
+                metadata: {
+                  filePath: entity.file_path,
+                  language: entity.language,
+                  projectName: entity.project_name,
+                  occurredAt: entity.occurred_at,
+                  participants: entity.participants,
+                }
+              }
+            })
+            
+            // Get similar items if requested
+            const similarItems: any[] = []
+            if (params.includeSimilar) {
+              // First check if entity has embedding
+              const checkQuery = `
+                MATCH (n {id: $entityId})
+                WHERE ${ownershipFilter}
+                RETURN n.embedding IS NOT NULL as hasEmbedding, labels(n) as labels
+              `
+              
+              const checkResult = await session.run(checkQuery, {
+                ...ownershipParams,
+                entityId
+              })
+              
+              if (checkResult.records.length > 0) {
+                const hasEmbedding = checkResult.records[0].get('hasEmbedding')
+                const labels = checkResult.records[0].get('labels')
+                
+                if (hasEmbedding) {
+                  // Determine which indexes to search
+                  const indexesToSearch = []
+                  if (!params.types || params.types.length === 0) {
+                    indexesToSearch.push('memory_embeddings', 'code_embeddings')
+                  } else {
+                    if (params.types.includes('memory')) indexesToSearch.push('memory_embeddings')
+                    if (params.types.includes('code')) indexesToSearch.push('code_embeddings')
+                  }
+                  
+                  for (const indexName of indexesToSearch) {
+                    const simQuery = `
+                      MATCH (n {id: $entityId})
+                      WHERE ${ownershipFilter}
+                      CALL db.index.vector.queryNodes($indexName, 30, n.embedding)
+                      YIELD node as s, score
+                      WHERE s.id <> n.id 
+                        AND ${ownershipFilter.replace('n.', 's.')}
+                        AND score >= $threshold
+                      RETURN 
+                        s.id as id,
+                        labels(s)[0] as type,
+                        score,
+                        s.name as name,
+                        s.title as title,
+                        s.file_path as filePath,
+                        s.project_name as projectName,
+                        substring(COALESCE(s.content, s.summary, ''), 0, 200) as snippet,
+                        s as fullEntity
+                      ORDER BY score DESC
+                      LIMIT 10
+                    `
+                    
+                    const simResult = await session.run(simQuery, {
+                      ...ownershipParams,
+                      entityId,
+                      indexName,
+                      threshold: params.similarityThreshold || 0.7
+                    })
+                    
+                    simResult.records.forEach((record: any) => {
+                      const entity = record.get('fullEntity').properties
+                      similarItems.push({
+                        id: record.get('id'),
+                        type: inferTypeFromLabels([record.get('type')]),
+                        relationship: 'SIMILAR',
+                        similarity: record.get('score'),
+                        title: record.get('title') || record.get('name') || record.get('filePath'),
+                        snippet: record.get('snippet'),
+                        metadata: {
+                          reason: 'Semantic similarity',
+                          filePath: entity.file_path,
+                          language: entity.language,
+                          projectName: entity.project_name,
+                          occurredAt: entity.occurred_at,
+                        }
+                      })
+                    })
+                  }
+                }
+              }
+            }
+            
+            // Combine and deduplicate results
+            const allItems = [...relatedItems, ...similarItems]
+            const uniqueItems = Array.from(
+              new Map(allItems.map(item => [item.id, item])).values()
+            ).slice(0, params.limit || 20)
+            
+            // Calculate summary statistics
+            const summary = {
+              totalRelated: uniqueItems.length,
+              byType: uniqueItems.reduce((acc, item) => {
+                acc[item.type] = (acc[item.type] || 0) + 1
+                return acc
+              }, {} as Record<string, number>),
+              byRelationship: uniqueItems.reduce((acc, item) => {
+                const rel = item.relationship || 'SIMILAR'
+                acc[rel] = (acc[rel] || 0) + 1
+                return acc
+              }, {} as Record<string, number>)
+            }
+            
+            // Determine if there are more results
+            const hasMore = relResult.records.length === (params.limit || 20)
+            const nextCursor = hasMore ? 
+              Buffer.from(JSON.stringify({ offset: offset + (params.limit || 20) })).toString('base64') : 
+              undefined
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    entityUri: params.entityUri,
+                    relatedItems: uniqueItems,
+                    summary,
+                    hasMore,
+                    nextCursor,
+                  }, null, 2),
+                },
+              ],
+            }
+          } finally {
+            await session.close()
+            await neo4jDriver.close()
+          }
+        }
+      )
+
+      server.tool(
         TOOL_DESCRIPTIONS.inspectEntity.name,
         TOOL_DESCRIPTIONS.inspectEntity.description,
         {

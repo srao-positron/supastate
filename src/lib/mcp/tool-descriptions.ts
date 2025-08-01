@@ -404,6 +404,135 @@ Expected results:
 - Entity URIs are from search results' id field`,
   },
 
+  getRelatedItems: {
+    name: 'getRelatedItems',
+    description: `Find all items related to a specific entity through relationships or semantic similarity.
+
+## Overview
+Discover connections and related content for any entity in the knowledge graph. This tool reveals
+direct relationships (code dependencies, memory references) and semantically similar content,
+helping you understand context and find relevant information that might not be obvious.
+
+## When to Use This Tool
+1. **Context expansion** - Find all content related to a specific topic
+2. **Code exploration** - Discover all code that references or is referenced by an entity
+3. **Memory connections** - Find all conversations about a specific code entity
+4. **Pattern discovery** - Identify similar implementations or discussions
+5. **Documentation gathering** - Collect all relevant information about a feature
+6. **Impact assessment** - See everything connected to what you're changing
+
+## Relationship Types Returned
+- **Direct relationships**: Imports, calls, references, mentions, authored by
+- **Semantic similarity**: Conceptually related content based on embeddings
+- **Cross-type connections**: Memory→Code, Code→Memory, Pattern associations
+- **Temporal relationships**: Related conversations from same session
+- **Structural relationships**: Parent/child, implements, extends
+
+## Integration into Your Workflow
+- Use after search to expand context around interesting results
+- Combine with inspectEntity for full details on related items
+- Filter by relationship type to focus on specific connections
+- Use similarity threshold to control relevance
+- Follow chains of relationships to understand system flow
+
+## Example Uses and Expected Results
+
+### Example 1: Finding all content about a function
+EntityUri: "code:src/auth/validateToken:validateToken"
+Types: ["code", "memory"]
+IncludeSimilar: true
+Expected results:
+- Controllers calling validateToken
+- Tests for validateToken
+- Memory chunks discussing token validation
+- Similar validation functions
+- Error handling patterns
+
+### Example 2: Exploring a conversation topic
+EntityUri: "memory:2024-01-15:session-123:chunk-5"
+Types: ["memory", "code"]
+Limit: 20
+Expected results:
+- Other chunks from same conversation
+- Code entities mentioned in discussion
+- Related conversations on same topic
+- Implementation code created after discussion
+
+### Example 3: Understanding a feature
+EntityUri: "code:src/features/notifications:NotificationService"
+RelationshipTypes: ["IMPORTS", "IMPORTED_BY", "REFERENCES"]
+Expected results:
+- All modules using NotificationService
+- Dependencies of NotificationService
+- Configuration files referencing it
+- Related API endpoints
+
+## Response Format
+{
+  "entityUri": "code:src/auth/validateToken:validateToken",
+  "relatedItems": [
+    {
+      "id": "code:src/controllers/auth:AuthController",
+      "type": "code",
+      "relationship": "IMPORTED_BY",
+      "title": "AuthController",
+      "snippet": "import { validateToken } from '../auth/validateToken'...",
+      "metadata": {
+        "filePath": "src/controllers/auth.ts",
+        "language": "typescript"
+      }
+    },
+    {
+      "id": "memory:2024-01-10:session-99:chunk-3",
+      "type": "memory",
+      "relationship": "REFERENCES",
+      "title": "Discussion about token validation security",
+      "snippet": "We need to ensure the validateToken function checks expiry...",
+      "metadata": {
+        "participants": ["alice", "bob"],
+        "projectName": "auth-service"
+      }
+    },
+    {
+      "id": "code:src/auth/verifyToken:verifyToken",
+      "type": "code",
+      "relationship": "SIMILAR",
+      "similarity": 0.89,
+      "title": "verifyToken",
+      "snippet": "export async function verifyToken(token: string)...",
+      "metadata": {
+        "reason": "Similar validation pattern"
+      }
+    }
+  ],
+  "summary": {
+    "totalRelated": 42,
+    "byType": {
+      "code": 28,
+      "memory": 14
+    },
+    "byRelationship": {
+      "IMPORTED_BY": 12,
+      "REFERENCES": 8,
+      "SIMILAR": 10,
+      "CALLS": 12
+    }
+  },
+  "hasMore": true,
+  "nextCursor": "eyJvZmZzZXQiOjIwfQ=="
+}
+
+## Pro Tips
+- Start with default options to see all relationships
+- Use type filter to focus on code or conversations
+- RelationshipTypes filter helps trace specific patterns
+- Higher similarity thresholds (>0.8) for more relevant results
+- Check hasMore to know if pagination is available
+- Use the summary to understand relationship distribution
+- Cross-type relationships reveal hidden connections
+- Temporal relationships help reconstruct conversation flow`,
+  },
+
   inspectEntity: {
     name: 'inspectEntity',
     description: `Get comprehensive details about any entity including code, memories, or GitHub items.
@@ -413,10 +542,14 @@ Deep dive into any entity to see all its properties, relationships, and context.
 complete information about a specific item including its content, metadata, connections, and similar 
 entities. Use after search to get full details.
 
+**Difference from getRelatedItems**: This tool focuses on the entity itself with a basic view of 
+relationships, while getRelatedItems provides comprehensive relationship exploration with filtering, 
+pagination, and richer metadata about related items.
+
 ## When to Use This Tool
 1. **Detailed examination** - See all properties of an entity
 2. **Context understanding** - Get full content and metadata
-3. **Relationship overview** - Quick view of connections
+3. **Quick relationship overview** - Basic view of connections (use getRelatedItems for detailed exploration)
 4. **Similarity search** - Find related entities
 5. **Code inspection** - See full implementation details
 6. **Memory review** - Read complete conversation chunks
@@ -546,6 +679,9 @@ export function getCapabilitiesDescription() {
       },
       exploreRelationships: {
         description: "Navigate the knowledge graph to trace connections"
+      },
+      getRelatedItems: {
+        description: "Find all items related to an entity through relationships or similarity"
       },
       inspectEntity: {
         description: "Get comprehensive details about any entity"
