@@ -72,16 +72,9 @@ export async function POST(request: NextRequest) {
       
       const { data: userRecord, error: userError } = await supabase
         .from('users')
-        .select('id, team_id, email')
+        .select('id, email')
         .eq('id', codeData.userId)
         .single()
-      
-      console.error('[MCP Debug] User query result:', {
-        hasUser: !!userRecord,
-        error: userError?.message || 'none',
-        userId: userRecord?.id,
-        hasTeamId: !!userRecord?.team_id
-      })
       
       if (!userRecord || userError) {
         console.error('[MCP Debug] User lookup failed:', userError)
@@ -90,12 +83,26 @@ export async function POST(request: NextRequest) {
           error_description: 'User not found' 
         }, { status: 400 })
       }
+      
+      // Get user's current team (if any)
+      const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('user_id', codeData.userId)
+        .single()
+      
+      console.error('[MCP Debug] User query result:', {
+        hasUser: !!userRecord,
+        userId: userRecord?.id,
+        hasTeam: !!teamMember?.team_id,
+        teamId: teamMember?.team_id
+      })
 
       // Create our own MCP access token
       const accessToken = await new SignJWT({
         sub: userRecord.id,
         email: userRecord.email,
-        workspace_id: userRecord.team_id ? `team:${userRecord.team_id}` : `user:${userRecord.id}`,
+        workspace_id: teamMember?.team_id ? `team:${teamMember.team_id}` : `user:${userRecord.id}`,
         scope: 'read write',
         client_id: client_id || 'mcp_client',
       })
@@ -154,19 +161,26 @@ export async function POST(request: NextRequest) {
         const supabase = createServiceClient()
         const { data: userRecord } = await supabase
           .from('users')
-          .select('id, team_id, email')
+          .select('id, email')
           .eq('id', payload.sub)
           .single()
         
         if (!userRecord) {
           throw new Error('User not found')
         }
+        
+        // Get user's current team (if any)
+        const { data: teamMember } = await supabase
+          .from('team_members')
+          .select('team_id')
+          .eq('user_id', payload.sub as string)
+          .single()
 
         // Issue new access token
         const accessToken = await new SignJWT({
           sub: userRecord.id,
           email: userRecord.email,
-          workspace_id: userRecord.team_id ? `team:${userRecord.team_id}` : `user:${userRecord.id}`,
+          workspace_id: teamMember?.team_id ? `team:${teamMember.team_id}` : `user:${userRecord.id}`,
           scope: 'read write',
           client_id: payload.client_id || 'mcp_client',
         })

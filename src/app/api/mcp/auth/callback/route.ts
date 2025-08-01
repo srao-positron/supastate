@@ -65,10 +65,10 @@ export async function GET(request: NextRequest) {
   })
   
   // Get user's team info for additional context
-  const { data: userRecord } = await supabase
-    .from('users')
-    .select('id, team_id')
-    .eq('id', user.id)
+  const { data: teamMember } = await supabase
+    .from('team_members')
+    .select('team_id')
+    .eq('user_id', user.id)
     .single()
   
   const callbackUrl = new URL(redirect_uri)
@@ -77,9 +77,9 @@ export async function GET(request: NextRequest) {
   
   // Add additional context like Stripe does
   callbackUrl.searchParams.set('user_id', user.id)
-  if (userRecord?.team_id) {
-    callbackUrl.searchParams.set('team_id', userRecord.team_id)
-    callbackUrl.searchParams.set('workspace_id', `team:${userRecord.team_id}`)
+  if (teamMember?.team_id) {
+    callbackUrl.searchParams.set('team_id', teamMember.team_id)
+    callbackUrl.searchParams.set('workspace_id', `team:${teamMember.team_id}`)
   } else {
     callbackUrl.searchParams.set('workspace_id', `user:${user.id}`)
   }
@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
   console.error('[MCP Debug]   - code:', authCode)
   console.error('[MCP Debug]   - state:', state)
   console.error('[MCP Debug]   - user_id:', user.id)
-  console.error('[MCP Debug]   - workspace_id:', userRecord?.team_id ? `team:${userRecord.team_id}` : `user:${user.id}`)
-  if (userRecord?.team_id) {
-    console.error('[MCP Debug]   - team_id:', userRecord.team_id)
+  console.error('[MCP Debug]   - workspace_id:', teamMember?.team_id ? `team:${teamMember.team_id}` : `user:${user.id}`)
+  if (teamMember?.team_id) {
+    console.error('[MCP Debug]   - team_id:', teamMember.team_id)
   }
   console.error('[MCP Debug] ===========================================')
   
