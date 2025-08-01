@@ -53,8 +53,7 @@ async function handleMcpRequest(request: NextRequest) {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer realm="${baseUrl}/sse", authz_server="${baseUrl}/.well-known/oauth-authorization-server"`,
-          'Link': `<${baseUrl}/.well-known/oauth-authorization-server>; rel="authorization_server", <${baseUrl}/.well-known/oauth-protected-resource>; rel="protected_resource"`,
+          'WWW-Authenticate': `Bearer realm="${baseUrl}/sse"`,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',

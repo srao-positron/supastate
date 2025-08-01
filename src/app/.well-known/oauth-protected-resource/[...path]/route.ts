@@ -10,11 +10,7 @@ export async function GET() {
   return NextResponse.json({
     resource: `${baseUrl}/sse`,
     authorization_servers: [
-      `${baseUrl}/.well-known/oauth-authorization-server`
-    ],
-    scopes_supported: ['read', 'write'],
-    bearer_methods_supported: ['header'],
-    resource_documentation: `${baseUrl}/docs/mcp`,
-    resource_signing_alg_values_supported: ['HS256'],
+      baseUrl  // Just the base URL, client will append /.well-known/oauth-authorization-server
+    ]
   })
 }

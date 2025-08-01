@@ -11,19 +11,11 @@ export async function GET() {
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/api/mcp/auth`,
     token_endpoint: `${baseUrl}/api/mcp/token`,
-    token_endpoint_auth_methods_supported: ['none'],
+    registration_endpoint: `${baseUrl}/api/mcp/register`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
-    scopes_supported: ['read', 'write'],
-    response_modes_supported: ['query'],
-    jwks_uri: supabaseUrl ? `${supabaseUrl}/auth/v1/jwks` : undefined,
-    registration_endpoint: `${baseUrl}/api/mcp/register`,
-    client_registration_types_supported: ['automatic'],
-    service_documentation: `${baseUrl}/docs/mcp`,
-    ui_locales_supported: ['en'],
-    claims_supported: ['sub', 'email', 'name'],
-    mcp_version: '1.0'
+    token_endpoint_auth_methods_supported: ['none']
   }, {
     headers: {
       'Access-Control-Allow-Origin': '*',
