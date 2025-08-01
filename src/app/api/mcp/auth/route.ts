@@ -7,6 +7,20 @@ export async function GET(request: NextRequest) {
   const redirect_uri = searchParams.get('redirect_uri')
   const client_id = searchParams.get('client_id')
   const state = searchParams.get('state')
+  const response_type = searchParams.get('response_type')
+  const code_challenge = searchParams.get('code_challenge')
+  const code_challenge_method = searchParams.get('code_challenge_method')
+  
+  // Log OAuth request from Claude
+  console.error('[MCP Debug] OAuth authorization request:', {
+    redirect_uri,
+    client_id,
+    state,
+    response_type,
+    code_challenge: code_challenge ? 'present' : 'missing',
+    code_challenge_method,
+    allParams: Object.fromEntries(searchParams.entries())
+  })
   
   if (!redirect_uri) {
     return NextResponse.json(

@@ -26,6 +26,17 @@ export async function POST(request: NextRequest) {
     }
     
     const { grant_type, code, redirect_uri, client_id, code_verifier, refresh_token } = body
+    
+    // Log token exchange request
+    console.error('[MCP Debug] Token exchange request:', {
+      grant_type,
+      code: code ? code.substring(0, 20) + '...' : 'missing',
+      redirect_uri,
+      client_id,
+      code_verifier: code_verifier ? 'present' : 'missing',
+      refresh_token: refresh_token ? 'present' : 'missing',
+      contentType
+    })
 
     // Handle authorization_code grant
     if (grant_type === 'authorization_code') {
@@ -94,13 +105,21 @@ export async function POST(request: NextRequest) {
         .setExpirationTime(MCP_REFRESH_EXPIRY)
         .sign(MCP_TOKEN_SECRET)
 
-      return NextResponse.json({
+      const response = {
         access_token: accessToken,
         token_type: 'Bearer',
         expires_in: 86400, // 24 hours in seconds
         refresh_token: refreshToken,
         scope: 'read write'
+      }
+      
+      console.error('[MCP Debug] Token exchange successful:', {
+        userId: userRecord.id,
+        tokenLength: accessToken.length,
+        expiresIn: response.expires_in
       })
+      
+      return NextResponse.json(response)
     }
     
     // Handle refresh_token grant

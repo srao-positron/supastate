@@ -34,11 +34,11 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Get the authenticated user and session
+  // Get the authenticated user (not just session for security)
   const supabase = await createClient()
-  const { data: { session }, error } = await supabase.auth.getSession()
+  const { data: { user }, error } = await supabase.auth.getUser()
 
-  if (error || !session) {
+  if (error || !user) {
     // Redirect back to auth if not authenticated
     const authUrl = new URL('/api/mcp/auth', request.nextUrl.origin)
     authUrl.searchParams.set('redirect_uri', redirect_uri)
@@ -46,13 +46,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(authUrl)
   }
 
-  // We have a session! Generate an authorization code
+  // We have an authenticated user! Generate an authorization code
   // OAuth2 expects an authorization code, not the token directly
   const authCode = Buffer.from(JSON.stringify({
-    userId: session.user.id,
+    userId: user.id,
+    email: user.email,
     exp: Date.now() + 5 * 60 * 1000, // 5 minutes
-    sessionId: session.access_token.substring(0, 8), // For tracking
+    timestamp: Date.now(),
   })).toString('base64url')
+  
+  // Log what we're sending back to Claude
+  console.error('[MCP Debug] Sending authorization code back to Claude:', {
+    redirect_uri,
+    state,
+    codeLength: authCode.length,
+    userId: user.id
+  })
   
   const callbackUrl = new URL(redirect_uri)
   callbackUrl.searchParams.set('code', authCode)
