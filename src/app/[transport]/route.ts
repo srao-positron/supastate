@@ -53,7 +53,7 @@ async function handleMcpRequest(request: NextRequest) {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer realm="${baseUrl}/sse"`,
+          'WWW-Authenticate': `Bearer resource_metadata=${baseUrl}/.well-known/oauth-protected-resource`,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -98,7 +98,7 @@ async function handleMcpRequest(request: NextRequest) {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Invalid or expired token"`,
+                'WWW-Authenticate': `Bearer resource_metadata=${baseUrl}/.well-known/oauth-protected-resource, error="invalid_token", error_description="Invalid or expired token"`,
                 'Access-Control-Allow-Origin': '*',
               },
             }
@@ -127,7 +127,7 @@ async function handleMcpRequest(request: NextRequest) {
           status: 401,
           headers: {
             'Content-Type': 'application/json',
-            'WWW-Authenticate': `Bearer realm="${baseUrl}", error="invalid_token", error_description="Token validation failed"`,
+            'WWW-Authenticate': `Bearer resource_metadata=${baseUrl}/.well-known/oauth-protected-resource, error="invalid_token", error_description="Token validation failed"`,
             'Access-Control-Allow-Origin': '*',
           },
         }
