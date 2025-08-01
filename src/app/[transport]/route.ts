@@ -6,6 +6,7 @@ import { getOwnershipFilter, getOwnershipParams } from '@/lib/neo4j/query-patter
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { jwtVerify } from 'jose'
+import { TOOL_DESCRIPTIONS, getCapabilitiesDescription } from '@/lib/mcp/tool-descriptions'
 
 // Ensure Redis is configured for MCP adapter
 const redisUrl = process.env.REDIS_URL || process.env.KV_URL
@@ -202,8 +203,8 @@ async function handleMcpRequest(request: NextRequest) {
     async (server) => {
       // Register tools with auth context
       server.tool(
-        "search",
-        "Search across code, memories, and GitHub data using natural language",
+        TOOL_DESCRIPTIONS.search.name,
+        TOOL_DESCRIPTIONS.search.description,
         {
           query: z.string().describe('Natural language search query'),
           types: z.array(z.enum(['code', 'memory', 'github'])).optional().describe('Filter by entity types'),
@@ -374,14 +375,14 @@ async function handleMcpRequest(request: NextRequest) {
       )
 
       server.tool(
-        "searchCode",
-        "Search code with language-specific understanding",
+        TOOL_DESCRIPTIONS.searchCode.name,
+        TOOL_DESCRIPTIONS.searchCode.description,
         {
           query: z.string().describe('Code pattern or natural language'),
           language: z.string().optional().describe('Filter by programming language'),
           project: z.string().optional().describe('Filter by project name'),
-          includeTests: z.boolean().optional().default(false),
-          includeImports: z.boolean().optional().default(true),
+          includeTests: z.boolean().optional().default(false).describe('Include test files in results'),
+          includeImports: z.boolean().optional().default(true).describe('Include import relationships'),
         },
         async (params) => {
           if (!userId || !workspaceId) {
@@ -479,15 +480,15 @@ async function handleMcpRequest(request: NextRequest) {
       )
 
       server.tool(
-        "searchMemories",
-        "Search development conversations and decisions",
+        TOOL_DESCRIPTIONS.searchMemories.name,
+        TOOL_DESCRIPTIONS.searchMemories.description,
         {
           query: z.string().describe('Natural language query'),
           dateRange: z.object({
-            start: z.string().optional(),
-            end: z.string().optional(),
-          }).optional(),
-          projects: z.array(z.string()).optional(),
+            start: z.string().optional().describe('ISO date string for range start'),
+            end: z.string().optional().describe('ISO date string for range end'),
+          }).optional().describe('Filter results by date range'),
+          projects: z.array(z.string()).optional().describe('Filter by project names'),
         },
         async (params) => {
           if (!userId || !workspaceId) {
@@ -589,13 +590,13 @@ async function handleMcpRequest(request: NextRequest) {
       )
 
       server.tool(
-        "exploreRelationships",
-        "Find connections between entities in the knowledge graph",
+        TOOL_DESCRIPTIONS.exploreRelationships.name,
+        TOOL_DESCRIPTIONS.exploreRelationships.description,
         {
-          entityUri: z.string().describe('Starting entity URI'),
-          relationshipTypes: z.array(z.string()).optional(),
-          depth: z.number().max(3).optional().default(2),
-          direction: z.enum(['in', 'out', 'both']).optional().default('both'),
+          entityUri: z.string().describe('Starting entity URI (from search result id field)'),
+          relationshipTypes: z.array(z.string()).optional().describe('Filter by specific relationship types (e.g., IMPORTS, CALLS, REFERENCES)'),
+          depth: z.number().max(3).optional().default(2).describe('How many hops to traverse (default: 2, max: 3)'),
+          direction: z.enum(['in', 'out', 'both']).optional().default('both').describe('Direction to traverse: in (dependents), out (dependencies), both'),
         },
         async (params) => {
           if (!userId || !workspaceId) {
@@ -704,13 +705,13 @@ async function handleMcpRequest(request: NextRequest) {
       )
 
       server.tool(
-        "inspectEntity",
-        "Get comprehensive details about any entity",
+        TOOL_DESCRIPTIONS.inspectEntity.name,
+        TOOL_DESCRIPTIONS.inspectEntity.description,
         {
-          uri: z.string().describe('Entity URI to inspect'),
-          includeRelationships: z.boolean().optional().default(true),
-          includeContent: z.boolean().optional().default(true),
-          includeSimilar: z.boolean().optional().default(false),
+          uri: z.string().describe('Entity URI to inspect (from search result id field)'),
+          includeRelationships: z.boolean().optional().default(true).describe('Include connected entities and their relationships'),
+          includeContent: z.boolean().optional().default(true).describe('Include full content/code of the entity'),
+          includeSimilar: z.boolean().optional().default(false).describe('Find and include semantically similar entities'),
         },
         async (params) => {
           if (!userId || !workspaceId) {
@@ -849,25 +850,7 @@ async function handleMcpRequest(request: NextRequest) {
       )
     },
     {
-      capabilities: {
-        tools: {
-          search: {
-            description: "Search across code, memories, and GitHub data",
-          },
-          searchCode: {
-            description: "Search code with language-specific understanding",
-          },
-          searchMemories: {
-            description: "Search development conversations and decisions",
-          },
-          exploreRelationships: {
-            description: "Navigate the knowledge graph",
-          },
-          inspectEntity: {
-            description: "Get detailed information about any entity",
-          },
-        },
-      },
+      capabilities: getCapabilitiesDescription(),
     },
     {
       basePath: "",
