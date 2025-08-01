@@ -47,15 +47,14 @@ async function handleMcpRequest(request: NextRequest) {
     return new NextResponse(
       JSON.stringify({
         error: 'unauthorized',
-        error_description: `Authentication required. Please sign in at ${baseUrl}/auth/login and then get your access token from ${baseUrl}/dashboard/api-keys`,
-        authentication_url: `${baseUrl}/auth/login`
+        error_description: 'Authentication required',
       }),
       {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
-          'WWW-Authenticate': `Bearer realm="${baseUrl}/mcp"`,
-          'Link': `<${baseUrl}/.well-known/oauth-authorization-server>; rel="authorization_server"`,
+          'WWW-Authenticate': `Bearer realm="${baseUrl}/sse", authz_server="${baseUrl}/.well-known/oauth-authorization-server"`,
+          'Link': `<${baseUrl}/.well-known/oauth-authorization-server>; rel="authorization_server", <${baseUrl}/.well-known/oauth-protected-resource>; rel="protected_resource"`,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',

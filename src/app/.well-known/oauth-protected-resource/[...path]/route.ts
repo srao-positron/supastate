@@ -6,8 +6,9 @@ export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.supastate.ai'
   
   // Return the same metadata regardless of the path suffix
+  // The resource is the SSE endpoint that MCP clients connect to
   return NextResponse.json({
-    resource: `${baseUrl}/mcp`,
+    resource: `${baseUrl}/sse`,
     authorization_servers: [
       `${baseUrl}/.well-known/oauth-authorization-server`
     ],

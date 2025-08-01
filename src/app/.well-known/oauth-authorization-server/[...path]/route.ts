@@ -18,6 +18,17 @@ export async function GET() {
     scopes_supported: ['read', 'write'],
     response_modes_supported: ['query'],
     jwks_uri: supabaseUrl ? `${supabaseUrl}/auth/v1/jwks` : undefined,
-    client_registration_types_supported: ['automatic']
+    registration_endpoint: `${baseUrl}/api/mcp/register`,
+    client_registration_types_supported: ['automatic'],
+    service_documentation: `${baseUrl}/docs/mcp`,
+    ui_locales_supported: ['en'],
+    claims_supported: ['sub', 'email', 'name'],
+    mcp_version: '1.0'
+  }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    }
   })
 }

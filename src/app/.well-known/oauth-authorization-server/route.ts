@@ -28,5 +28,11 @@ export async function GET() {
     claims_supported: ['sub', 'email', 'name'],
     // Indicate this is for MCP
     mcp_version: '1.0'
+  }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    }
   })
 }
